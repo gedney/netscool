@@ -1,0 +1,6 @@
+*.pyc
+*.swp
+*.egg-info
+_build
+_static
+_template

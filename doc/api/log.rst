@@ -2,6 +2,6 @@ log module
 ==========
 
 .. automodule:: log
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:

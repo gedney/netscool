@@ -1,9 +1,9 @@
 from scapy.all import Ether
 
 import IPython
-import lib
+import netscool.layer1
 
-class L2Device(lib.BaseDevice):
+class L2Device(netscool.layer1.BaseDevice):
     """
     A simple layer 2 device that prints any frame it receives. The
     interface we are making needs to be attached to a device, so this acts
@@ -28,21 +28,21 @@ class L2Device(lib.BaseDevice):
             if not frame:
                 continue
 
-            info = "Frame {} -> {}\n {}".format(
-                frame.src, frame.dst, frame)
-            print(info)
+            print("Frame {} -> {}\n{}".format(frame.src, frame.dst, frame))
             self.last_frame = frame
 
-class L2Interface(lib.BaseInterface):
+# Possible protocol status for our L2Interface.
+PROTOCOL_DOWN = 'down'
+PROTOCOL_UP = 'up'
+
+class L2Interface(netscool.layer1.L1Interface):
     """ A Layer 2 interface. """
     def __init__(self, name, mac, speed=1000, promiscuous=False):
         """
         :param name: Name of interface to make identification simpler.
         :param mac: Layer2 MAC address for interface in the form
             XX:XX:XX:XX:XX:XX. 
-        :param bandwidth: Bandwidth of interfaces in bits per second.
-            Each interface at the end of a link must have the same
-            bandwidth.
+        :param speed: Speed of interfaces in bits per second.
         :param promiscuous: A promiscuous interface will accept frames
             destined to any MAC address. A non-promiscuous interface
             will drop frames that are not destined for it.
@@ -50,7 +50,7 @@ class L2Interface(lib.BaseInterface):
         super().__init__(name, speed)
         self.mac = mac
         self.promiscuous = promiscuous
-        self.protocol_status = lib.PROTOCOL_DOWN
+        self.protocol_status = PROTOCOL_DOWN
 
     @property
     def protocol_up(self):
@@ -63,7 +63,7 @@ class L2Interface(lib.BaseInterface):
         True if the layer 1 line status and layer 2 protocol status are
         both up.
         """
-        # Hint: BaseInterface has a line_status member indicating the
+        # Hint: L1Interface has a line_status member indicating the
         # status of the layer 1 link status.
         pass
 
@@ -73,7 +73,7 @@ class L2Interface(lib.BaseInterface):
         Get a tuple of the layer 1 line status and layer 2 protocol status
         for the interface.
         """
-        # Hint: BaseInterface has a line_status member indicating the
+        # Hint: L1Interface has a line_status member indicating the
         # status of the layer 1 link status.
         pass
 
@@ -113,6 +113,12 @@ class L2Interface(lib.BaseInterface):
         #    dst mac of the frame matches our mac.
         # If anything fails while receiving the frame return None to drop
         # the frame.
+        #
+        # Note: Ether(data) will throw an exception if data is not a valid
+        # frame. Any unhandled exceptions will cause our device to
+        # 'crash'. Be careful to handle exceptions appropriately.
+
+        # This receives data from layer 1.
         data = super().receive()
         if not data:
             return None
@@ -129,19 +135,22 @@ class L2Interface(lib.BaseInterface):
         #    up/up
         #  * Is the frame valid. We consider the frame valid if it is a
         #    Scapy Ether object.
+
+        # This will send our frame to layer 1, where it will be sent
+        # across the cable the other attached interface.
         super().send(bytes(frame))
 
     def __str__(self):
         return "{} ({})".format(super().__str__(), self.mac)
 
-#from netscool.layer2 import L2Interface
+from netscool.layer2 import L2Interface
 
 # Running lesson.py will put you into a sandbox where you can experiment
 # and check your L2Interface implementation is working.
 if __name__ == "__main__":
     interface = L2Interface("MyInterface", "22:22:22:22:22:22")
     device = L2Device('MyDevice', [interface])
-    cable = lib.SocketCable(22222, 11111)
+    cable = netscool.layer1.SocketCable(22222, 11111)
     interface.plug_cable(cable)
 
     # Some example frames you can use in the interactive prompt.
@@ -156,7 +165,7 @@ if __name__ == "__main__":
         # current namespace eg.
         # > interface.send(frame)
         # > interface.send(bad_frame)
-        # > device.interfaces[0].send(frame)
+        # > device.interface('MyInterface').send(frame)
         # > interface.status
         IPython.embed()
     finally:
@@ -184,7 +193,7 @@ def network():
     interface2 = L2Interface("Int2", "22:22:22:22:22:22")
     device1 = L2Device("Dev1", [interface1])
     device2 = L2Device("Dev2", [interface2])
-    cable = lib.Cable()
+    cable = netscool.layer1.Cable()
     interface1.plug_cable(cable)
     interface2.plug_cable(cable)
 
@@ -206,8 +215,8 @@ def test_interface_status(network):
 
     assert interface1.upup == True
     assert interface2.upup == True
-    assert interface1.protocol_status == lib.PROTOCOL_UP
-    assert interface2.protocol_status == lib.PROTOCOL_UP
+    assert interface1.protocol_status == PROTOCOL_UP
+    assert interface2.protocol_status == PROTOCOL_UP
     assert interface1.protocol_up == True
     assert interface2.protocol_up == True
     assert interface1.status == ('up', 'up')

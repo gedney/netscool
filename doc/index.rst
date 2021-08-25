@@ -15,12 +15,12 @@ This course is aimed at developers, and assumes a working knowledge of Python an
 Building Blocks
 ===============
 
-In the real world networks are made up of physical equipment. This is Layer 1 of the OSI model, or the Physical Layer. We roughly approximate the physical world in this course using the classes in the ``netscool.layer1`` module.
+In the real world networks are made up of physical equipment. We roughly approximate the physical world in this course using the classes in the ``netscool.layer1`` module.
 
 There a few classes from this module that are worth pointing out.
 
  * BaseDevice - All of our devices (routers, switches etc) will build upon this class.
- * BaseInterface - The interfaces for our devices will build upon this class.
+ * L1Interface - Represents a physical interface, our interfaces for our devices will build on this class.
  * Cable - Used to connect interfaces locally in our own code.
  * SocketCable - Used to connect to interfaces of devices running in other processes.
 
@@ -30,28 +30,20 @@ Most of the lessons also rely heavily on ``scapy`` to build packets. This is bec
 
 The lessons also uses ``IPython``, and ``Pytest`` to provide a console to interact with devices and test they are working.
 
-Lesson Structure
-================
+Obligatory OSI Model Section
+============================
 
-Each lesson should have the following files.
- * ``lesson.py`` - Where you write your code. Contains stubs and guides of where to start.
- * ``network.py`` - Devices your code interacts with, this is normally a working implementation that you have to talk to.
- * ``lib.py`` - Parts of the ``netscool`` library that we require for this lesson. Alternatively you can use your own implementations from previous lessons.
-
-The OSI Model
-=============
-
-There are many great explanation of the OSI model already so this section is kept brief. For more detailed explanations feel free to undertake your own research.
+There are many great explanations of the OSI model already, so this section is kept brief. For more detailed explanations feel free to undertake your own research.
 
 Networking is broken down logically into 7 layers called the OSI model. This model attempts to break the responsibilities of protocols and network devices into one of the layers of the model. Practically layers 5, 6, and 7 can be treated as one, and we will mostly ignore these. Layers 1-4 are responsible for moving traffic from one application, across a network, to another application, so we will only be focussing on those.
 
-Each layer depends and builds upon the previous layer. The layers we are concerned with are. 
+Each layer depends and builds upon the previous layer. The layers briefly are. 
 
  * 1 - Physical - Physical equipment, plugs, cables.
  * 2 - Data Link - Transfers frames across physical links between each device in the network.
  * 3 - Network - Transfers packets logically between hosts in or across networks.
  * 4 - Transport - Transfers datagrams from an application on host to an application on a remote host.
- * 5 - Application - Arbitrary application specific protocol data.
+ * 5,6,7 - Application - Arbitrary application specific protocol data.
 
 Some common protocols at each layer are.
 
@@ -84,6 +76,7 @@ The layers of the OSI model can be seen more clearly in the structure of encapsu
    :caption: Lessons
 
    lessons/lesson1.rst
+   lessons/lesson2.rst
 
 .. toctree::
    :maxdepth: 2

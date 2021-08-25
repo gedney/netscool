@@ -1,6 +1,7 @@
-# The sacred texts "Cisco Catalyst LAN Switching" from the prophets Louis R. Rossi and Thomas Rossi.
-# https://flylib.com/books/en/2.115.1.67/1/
-
+"""
+Provides everything required to create the physical components of the
+network.
+"""
 import time
 import logging
 import struct
@@ -30,6 +31,31 @@ class BaseDevice():
         self.interfaces = interfaces
         self.name = name
 
+    def show_interfaces(self):
+        """
+        Print all interfaces in this device and the relevant status for
+        the interface.
+        """
+
+        print(self)
+        for interface in self.interfaces:
+            print(interface, interface.status)
+
+    def interface(self, interface_name):
+        """
+        Get a devices interface by name. Returns the first interface
+        whose name matches ``interface_name``. Assumes all interfaces in
+        the device have unique names.
+
+        :param interface_name: Name of interface to get.
+        :returns: The interface, or None.
+        """
+        for interface in self.interfaces:
+            if interface.name != interface_name:
+                continue
+            return interface
+        return None
+
     @property
     def powered(self):
         """
@@ -37,7 +63,7 @@ class BaseDevice():
         powers on the devices, and calling shutdown() powers off the
         device.
         """
-        return self._thread is not None
+        return self._thread is not None and self._thread.is_alive()
 
     def shutdown(self):
         """
@@ -45,18 +71,17 @@ class BaseDevice():
         down the device. Also powers off all interfaces in the device.
         """
 
-        # No thread so nothing to shut down.
-        if not self._thread:
+        # Device is not powered on so nothing to shutdown.
+        if not self.powered:
             return
-
-        logger = logging.getLogger('netscool.layer1.device.status')
-        logger.info("{} shutdown".format(self))
 
         # Set the shutdown event and wait for the thread to join.
         self._shutdown_event.set()
         self._thread.join()
         self._thread = None
+        self._internal_shutdown()
 
+    def _internal_shutdown(self):
         # Power off all interfaces on the device. This will propagate
         # so any up/up links to this device will become down/down.
         for interface in self.interfaces:
@@ -66,6 +91,9 @@ class BaseDevice():
         # Reset the shutdown event so the device can be started again.
         self._shutdown_event.clear()
 
+        logger = logging.getLogger('netscool.layer1.device.status')
+        logger.info("{} shutdown".format(self))
+
     def start(self):
         """
         Start the main event_loop thread for the device. Also powers on
@@ -73,7 +101,7 @@ class BaseDevice():
         up/up if they have an active link.
         """
         # Thread is already running so nothing to do.
-        if self._thread:
+        if self._thread and self._thread.is_alive():
             return
 
         logger = logging.getLogger('netscool.layer1.device.status')
@@ -102,22 +130,24 @@ class BaseDevice():
         """
         Wrapper for event_loop() that handles the shutdown event.
         """
-        while not self._shutdown_event.is_set():
-            BaseDevice._lock.acquire()
+        try:
+            while not self._shutdown_event.is_set():
+                with BaseDevice._lock:
+                    # Something needs to trigger the cables plugged into
+                    # the interfaces to actually transfer. Instead of
+                    # making each cable its own thread, we just update all
+                    # the attached cables here.
+                    for interface in self.interfaces:
+                        interface.update()
+                        if not interface.cable:
+                            continue
+                        interface.cable.update()
 
-            # Something needs to trigger the cables plugged into the
-            # interfaces to actually transfer. Instead of making each
-            # cable its own thread, we just update all the attached
-            # cables here.
-            for interface in self.interfaces:
-                interface.update()
-                if not interface.cable:
-                    continue
-                interface.cable.update()
-
-            self.event_loop()
-            BaseDevice._lock.release()
-            time.sleep(0.1)
+                    self.event_loop()
+                time.sleep(0.1)
+        finally:
+            self._shutdown_event.set()
+            self._internal_shutdown()
 
     def __str__(self):
         return self.name
@@ -128,10 +158,8 @@ class BaseInterface():
     the role of the physical hardware for the interface. Logic for
     higher level interfaces build on this base functionality.
     """
-    def __init__(self, name, speed=1000):
-        # TODO check both ends speed match.
-        self.speed = speed
-        self.line_status = LINE_DOWN
+    def __init__(self, name):
+        #self.line_status = LINE_DOWN
         self.name = name
 
         self.cable = None
@@ -152,6 +180,51 @@ class BaseInterface():
         assert val in [True, False], (
             "Interface powered can only be True | False.")
         self._powered = val
+
+    def plug_cable(self, cable):
+        """
+        Plug a cable into the interface.
+        """
+        cable.plugin(self)
+
+    def update(self):
+        self.negotiate_connection()
+
+    @property
+    def status(self):
+        raise NotImplementedError("Interface provides no status")
+    def negotiate_connection(self):
+        raise NotImplementedError(
+            "Interface provides no negotiate_connection.")
+    def shutdown(self):
+        raise NotImplementedError("Interface provides no shutdown.")
+    def no_shutdown(self):
+        raise NotImplementedError("Interface provides no no_shutdown.")
+    def send(self, data):
+        raise NotImplementedError("Interface provides no send.")
+    def receive(self):
+        raise NotImplementedError("Interface provides no receive.")
+
+    def __str__(self):
+        return self.name
+
+class L1Interface(BaseInterface):
+    def __init__(self, name, speed=1000):
+        super().__init__(name)
+
+        # TODO check both ends speed match.
+        self.speed = speed
+        self.line_status = LINE_DOWN
+
+        #self.cable = None
+        #self.recv_buffer = []
+        #self.send_buffer = []
+        #self._powered = False
+
+    @property
+    def status(self):
+        """ Gets the layer 1 line status for the interface. """
+        return self.line_status
 
     @property
     def line_up(self):
@@ -204,15 +277,6 @@ class BaseInterface():
         logger.info("{} sending layer1 data".format(self))
         self.send_buffer.append(data)
 
-    def plug_cable(self, cable):
-        """
-        Plug a cable into the interface.
-        """
-        cable.plugin(self)
-
-    def update(self):
-        self.negotiate_connection()
-
     def negotiate_connection(self):
         """
         Negotiate connectivity for this layer. At layer 1 this is usually
@@ -234,9 +298,6 @@ class BaseInterface():
             if self.line_status == LINE_DOWN:
                 logger.info("{} line up".format(self))
                 self.line_status = LINE_UP
-
-    def __str__(self):
-        return self.name
 
 class BaseCable():
     """

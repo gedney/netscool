@@ -75,9 +75,6 @@ class Switch(netscool.layer1.BaseDevice):
     def __str__(self):
         return "{} ({})".format(super().__str__(), self.mac)
 
-# TODO: Remove.
-from netscool.layer2 import Switch
-
 if __name__ == "__main__":
     switch = Switch(
         "sw0", "00:00:00:00:00:00",  [

@@ -143,8 +143,6 @@ class L2Interface(netscool.layer1.L1Interface):
     def __str__(self):
         return "{} ({})".format(super().__str__(), self.mac)
 
-from netscool.layer2 import L2Interface
-
 # Running lesson.py will put you into a sandbox where you can experiment
 # and check your L2Interface implementation is working.
 if __name__ == "__main__":

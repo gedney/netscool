@@ -1,34 +1,31 @@
 import collections
 from scapy.all import Ether
 import IPython
+
+import netscool
+netscool.lesson('lesson2')
+
 import netscool.layer1
 
-# These are classes that should have been made in previous lessons. If you
-# would like to use your own implementations, import or copy them here,
-# and remove these imports. Doing "from <module> import <object>" is
-# generally discouraged because it removes the namespace for whatever is
-# being imported, and increases the risk of name conflicts. Here we are
-# doing it intentionally to make replacing these classes with your own
-# implementation simpler.
-from netscool.layer2 import L2Device
-from netscool.layer2 import L2Interface
-
-# If using the provided classes, setting up netscool logging will give you
-# some output of what they are doing. You can also add similar logging to
-# your own classes.
-import netscool.log
-netscool.log.setup()
-netscool.log.add('netscool.layer2')
-
-# A namedtuple for CAM table entries. Every entry has an interface to send
-# frames out of, and the last time we saw a frame for this entry so we can
-# time it out.
-CAMEntry = collections.namedtuple('CAMEntry', ['interface', 'last_seen'])
+# These are classes you should have made in lesson 1. Replace <your_module>
+# with your own module. Doing "from <module> import <object>" is generally
+# discouraged because it removes the namespace for whatever is being
+# imported, and increases the risk of name conflicts. Here we are doing
+# it intentionally so you dont have to update every existing reference to
+# these classes in this file, and to make it clear which classes you need
+# to provide.
+from <your_module> import L2Device, L2Interface
 
 class Switch(netscool.layer1.BaseDevice):
     """
     A basic switch with a CAM table.
     """
+    # A namedtuple for CAM table entries. Every entry has an interface to
+    # send frames out of, and the last time we saw a frame for this entry
+    # so we can time it out. 
+    CAMEntry = collections.namedtuple(
+        'CAMEntry', ['interface', 'last_seen'])
+
     def __init__(self, name, mac, interfaces):
         super().__init__(name, interfaces)
 
@@ -75,6 +72,7 @@ class Switch(netscool.layer1.BaseDevice):
     def __str__(self):
         return "{} ({})".format(super().__str__(), self.mac)
 
+from netscool.layer2 import Switch, L2Device, L2Interface
 if __name__ == "__main__":
     switch = Switch(
         "sw0", "00:00:00:00:00:00",  [

@@ -1,16 +1,20 @@
 from scapy.all import Ether
 
 import IPython
+
+import netscool
+netscool.lesson('lesson1')
+
 import netscool.layer1
 import netscool.layer2
+
 import netscool.log
+netscool.log.setup()
+netscool.log.add('netscool.layer1')
+netscool.log.add('netscool.layer2')
+netscool.log.list()
 
 if __name__ == "__main__":
-    netscool.log.setup()
-    netscool.log.add('netscool.layer1')
-    netscool.log.add('netscool.layer2')
-    netscool.log.list()
-
     interface = netscool.layer2.L2Interface(
         "Interface", "11:11:11:11:11:11")
     device = netscool.layer2.L2Device('Device', [interface])

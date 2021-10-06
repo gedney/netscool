@@ -1,7 +1,8 @@
-from scapy.all import Ether
-
 import time
 import IPython
+
+import netscool
+netscool.lesson('lesson2')
 
 import netscool.layer1
 import netscool.layer2
@@ -9,7 +10,7 @@ import netscool.layer2
 import netscool.log
 netscool.log.setup()
 netscool.log.add('netscool.layer2.switch')
-netscool.log.add('netscool.layer2.interface')
+netscool.log.add('netscool.layer2.device')
 netscool.log.list()
 
 if __name__ == "__main__":
@@ -41,8 +42,6 @@ if __name__ == "__main__":
 
     cable = netscool.layer1.SocketCable(11111, 22222)
     switch.interface('0/1').plug_cable(cable)
-
-    #frame = Ether(src=interface.mac, dst='22:22:22:22:22:22')
 
     try:
         switch.start()

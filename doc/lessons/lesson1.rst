@@ -72,4 +72,4 @@ Once your tests pass, congratulations you are done!
 Am I Really Done?
 -----------------
 
-Lol no, this course is also secretly about not writing trash code. Write some comments and docstrings. Maybe add some extra tests if relevant. If you really want bonus points get someone to do a code review and roast your comments for not having full stops. The code for this lesson is relatively straight forward, however later lessons will grow in complexity, and bad practices will bite you in the long run (I will literally bite you if you dont put full stops on your comments).
+Lol no, this course is also secretly about not writing trash code. Write some comments and docstrings. Maybe add some extra tests if relevant. Refactor your code into a module you can reuse in later lessons. If you really want bonus points get someone to do a code review and roast your comments for not having full stops. The code for this lesson is relatively straight forward, however later lessons will grow in complexity, and bad practices will bite you in the long run (I will literally bite you if you dont put full stops on your comments).

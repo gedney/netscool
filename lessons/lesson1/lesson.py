@@ -1,6 +1,14 @@
 from scapy.all import Ether
 
 import IPython
+
+# This is some special boilerplate to tell netscool which lesson we are
+# running. This becomes important when different lessons require different
+# implementations of the same class. This should be done before any other
+# netscool imports.
+import netscool
+netscool.lesson('lesson1')
+
 import netscool.layer1
 
 class L2Device(netscool.layer1.BaseDevice):
@@ -28,15 +36,16 @@ class L2Device(netscool.layer1.BaseDevice):
             if not frame:
                 continue
 
-            print("Frame {} -> {}\n{}".format(frame.src, frame.dst, frame))
+            print("{} got frame\n{}".format(self, frame.show(dump=True)))
             self.last_frame = frame
-
-# Possible protocol status for our L2Interface.
-PROTOCOL_DOWN = 'down'
-PROTOCOL_UP = 'up'
 
 class L2Interface(netscool.layer1.L1Interface):
     """ A Layer 2 interface. """
+
+    # Possible protocol status for our L2Interface.
+    PROTOCOL_DOWN = 'down'
+    PROTOCOL_UP = 'up'
+
     def __init__(self, name, mac, speed=1000, promiscuous=False):
         """
         :param name: Name of interface to make identification simpler.
@@ -50,7 +59,7 @@ class L2Interface(netscool.layer1.L1Interface):
         super().__init__(name, speed)
         self.mac = mac
         self.promiscuous = promiscuous
-        self.protocol_status = PROTOCOL_DOWN
+        self.protocol_status = L2Interface.PROTOCOL_DOWN
 
     @property
     def protocol_up(self):
@@ -213,8 +222,8 @@ def test_interface_status(network):
 
     assert interface1.upup == True
     assert interface2.upup == True
-    assert interface1.protocol_status == PROTOCOL_UP
-    assert interface2.protocol_status == PROTOCOL_UP
+    assert interface1.protocol_status == L2Interface.PROTOCOL_UP
+    assert interface2.protocol_status == L2Interface.PROTOCOL_UP
     assert interface1.protocol_up == True
     assert interface2.protocol_up == True
     assert interface1.status == ('up', 'up')

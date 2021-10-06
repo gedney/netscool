@@ -77,6 +77,7 @@ The layers of the OSI model can be seen more clearly in the structure of encapsu
 
    lessons/lesson1.rst
    lessons/lesson2.rst
+   lessons/lesson3.rst
 
 .. toctree::
    :maxdepth: 2

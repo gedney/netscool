@@ -6,12 +6,12 @@ In this lesson we will build a basic layer 2 switch.
 What is a Switch?
 -----------------
 
-In the early days of networking the only way to connect multiple host together was to connect them all to the same physical media, and have them all cooperate in their use of that media. Unfortunately this approach is inflexible and does not scale well beyond a handful of hosts, because every host sees every other hosts traffic, and they are all sharing the same bandwidth. To fix this we need some device that all the hosts can connect to, which can coordinate sending messages between the connected hosts. This device is a switch.
+In the early days of networking the only way to connect multiple host together was to connect them all to the same physical media and have them all cooperate in their use of that media. Unfortunately this approach is inflexible and does not scale well beyond a handful of hosts. Every host sees every other hosts traffic, and they are all sharing the same bandwidth. To fix this we need some device that all the hosts can connect to, which can coordinate sending messages between them. This device is a switch.
 
 OK, but why is the lesson called "CAM Air"?
 -------------------------------------------
 
-Because the most important part of a switch is the CAM (Content Addressable Memory) table. As discussed in ``lesson1`` every interface has a MAC address, and every ``Ethernet`` frame has a source and destination MAC address. A switch can have many host connected to it. When one of those hosts wants to send a frame to another host, it creates a frame with its MAC and the destination host MAC, and sends it out its interface. The Switch then gets the frame and has to figure out which of its interfaces to send it out of, to get to the destination. This is where the CAM table swoops into action. It is a big list of MAC address to interface mappings. This means when the switch gets the frame, it looks up the destination MAC in its CAM table, and sends it out the corresponding interface, where the destination host is patiently waiting for its frame.
+Because the most important part of a switch is the CAM (Content Addressable Memory) table. As discussed in ``lesson1`` every interface has a MAC address, and every ``Ethernet`` frame has a source and destination MAC address. A switch can have many hosts connected to it. When one of those hosts wants to send a frame to another host, it creates a frame with its MAC and the destination host MAC, and sends it out an interface. The Switch then gets the frame and has to figure out which of its interfaces to send it out of to get to the destination. This is where the CAM table swoops into action. It is a big list of MAC address to interface mappings. This means when the switch gets the frame, it looks up the destination MAC in its CAM table, and sends it out the corresponding interface, where the destination host is patiently waiting for its frame.
 
 Unfortunately this explanation only raises more questions
  * How does the CAM table get populated?
@@ -25,7 +25,7 @@ When the Switch first boots up it has no idea what devices are connected to it. 
 What happens if the destination MAC isn't in the CAM table?
 -----------------------------------------------------------
 
-The Switch learning MAC addresses from the frame source address is all well and good, but doesnt really help if the device hasnt sent a frame yet, and therefore isnt in the CAM table. In this case the Switch has only one option, send the frame to everyone and hope the destination host gets it. This might seem like a crude solution, but generally traffic between hosts is bi-directional so the CAM table quickly gets populated and the frame spamming stops.
+The Switch learning MAC addresses from the frame source address is all well and good, but doesnt really help if the device hasnt sent a frame yet. In this case the Switch has only one option, send the frame to everyone and hope the destination host gets it. This might seem like a crude solution, but generally traffic between hosts is bi-directional so the CAM table quickly gets populated and the frame flooding is only temporary.
 
 Remember that promiscuous mode?
 -------------------------------
@@ -40,6 +40,6 @@ The short answer is it doesn't. The best guess it can make is if it hasn't seen 
 Get to work
 -----------
 
-This should be enough information to start fleshing out the ``Switch`` class in ``lesson.py``. The lesson network is setup as follows.
+This should be enough information to start fleshing out the ``Switch`` class in ``lesson.py``. You will have to reuse some of your code from ``lesson1`` so make sure you can easily import the bits you need. The lesson network is setup as follows.
 
 .. image:: lesson2_network.svg

@@ -1,29 +1,13 @@
 from scapy.all import Ether
-
 import IPython
-
-# This is some special boilerplate to tell netscool which lesson we are
-# running. This becomes important when different lessons require different
-# implementations of the same class. This should be done before any other
-# netscool imports.
-import netscool
-netscool.lesson('lesson1')
-
 import netscool.layer1
 
 class L2Device(netscool.layer1.BaseDevice):
     """
-    A simple layer 2 device that prints any frame it receives. The
+    A simple layer 2 device that logs any frame it receives. The
     interface we are making needs to be attached to a device, so this acts
     as a placeholder until we have built a more functional layer 2 device.
     """
-    def __init__(self, name, interfaces):
-        super().__init__(name, interfaces)
-
-        # Keep track of the last frame the device received to make testing
-        # easier.
-        self.last_frame = None
-
     def event_loop(self):
         """
         Each device run in a seperate thread and call their ``event_loop``
@@ -36,8 +20,10 @@ class L2Device(netscool.layer1.BaseDevice):
             if not frame:
                 continue
 
-            print("{} got frame\n{}".format(self, frame.show(dump=True)))
-            self.last_frame = frame
+            # Print or log the frame here.
+            # Hint: frame.show(dump=True) will give a string will the
+            # full details of the frame.
+            pass
 
 class L2Interface(netscool.layer1.L1Interface):
     """ A Layer 2 interface. """
@@ -183,98 +169,213 @@ if __name__ == "__main__":
 # any function starting with 'test_' is a test).
 # $ pytest lesson.py
 # For more details on pytest see pytest documentation.
-import time
 import pytest
+import netscool
+import netscool.layer2
 
-# Note: The various sleeps throughout the tests are necessary because each
-# devices event_loop has a delay between each run, and they don't run
-# simultaneously. This means there is a delay between device.start() and
-# interfaces transitioning to up/up. There is also a delay between sending
-# out an interface and the remote end receiving for the same reason.
-# Sleeping 0.5 seconds means every device will have a chance to run its
-# event loop, and all actions in the network to take place.
-
+# Note: Each device has its own event_loop running in a seperate thread
+# to the main thread. This means that many actions are not instantaneous
+# and instead take some time to propagate as each device runs its event
+# loop. The netscool.Event class is used extensively throughout the tests
+# to wait for events to propagate through the network. It is advised that
+# you spend some time reading the documentation for the Event class and
+# have an understanding of the why/how of its use.
 @pytest.fixture
 def network():
+    """
+    Create a simple 2 device network. 'device1' is our implementation
+    (L2Device, L2Interface), and 'device2' is the reference
+    implementation.
+    """
+
     interface1 = L2Interface("Int1", "11:11:11:11:11:11")
-    interface2 = L2Interface("Int2", "22:22:22:22:22:22")
     device1 = L2Device("Dev1", [interface1])
-    device2 = L2Device("Dev2", [interface2])
+
+    interface2 = netscool.layer2.L2Interface("Int2", "22:22:22:22:22:22")
+    device2 = netscool.layer2.L2Device("Dev2", [interface2])
+
     cable = netscool.layer1.Cable()
     interface1.plug_cable(cable)
     interface2.plug_cable(cable)
 
+    event = netscool.Event()
     try:
         device1.start()
         device2.start()
-        time.sleep(0.5)
+
+        # Starting the devices is not instantaneous. The event will wait
+        # until all assert statements in the condition block are true
+        # before proceeding. If the statements arent eventually True then
+        # an exception will be raised. See netscool.Event documentation
+        # for more details.
+        while event.wait:
+            with event.conditions:
+                assert device1.powered == True
+                assert device2.powered == True
+                assert device1.interface("Int1").powered == True
+                assert device2.interface("Int2").powered == True
         yield device1, device2
 
     finally:
         device1.shutdown()
         device2.shutdown()
+        while event.wait:
+            with event.conditions:
+                assert device1.powered == False
+                assert device2.powered == False
     
 def test_interface_status(network):
-
+    """
+    Test interface status transitions correctly.
+    """
+    event = netscool.Event()
     device1, device2 = network
-    interface1 = device1.interfaces[0]
-    interface2 = device2.interfaces[0]
+    interface1 = device1.interface("Int1")
+    interface2 = device2.interface("Int2")
 
-    assert interface1.upup == True
-    assert interface2.upup == True
-    assert interface1.protocol_status == L2Interface.PROTOCOL_UP
-    assert interface2.protocol_status == L2Interface.PROTOCOL_UP
-    assert interface1.protocol_up == True
-    assert interface2.protocol_up == True
-    assert interface1.status == ('up', 'up')
-    assert interface2.status == ('up', 'up')
+    # Wait for interfaces to come up.
+    while event.wait:
+        with event.conditions:
+            assert interface1.upup == True
+            assert interface2.upup == True
+            assert interface1.protocol_status == L2Interface.PROTOCOL_UP
+            assert interface2.protocol_status == L2Interface.PROTOCOL_UP
+            assert interface1.protocol_up == True
+            assert interface2.protocol_up == True
+            assert interface1.status == ('up', 'up')
+            assert interface2.status == ('up', 'up')
 
+    # Shutdown our interface and make sure the other interface goes down.
+    interface1.shutdown()
+    while event.wait:
+        with event.conditions:
+            assert interface1.upup == False
+            assert interface2.upup == False
+            assert interface1.protocol_up == False
+            assert interface2.protocol_up == False
+            assert interface1.status == ('admin down', 'down')
+            assert interface2.status == ('down', 'down')
+
+    # Bring the interfaces back up.
+    interface1.no_shutdown()
+    while event.wait:
+        with event.conditions:
+            assert interface1.upup == True
+            assert interface2.upup == True
+
+    # Shutdown the other interface and make sure our interface goes down.
     interface2.shutdown()
-    time.sleep(0.5)
-    assert interface1.upup == False
-    assert interface2.upup == False
-    assert interface1.protocol_up == False
-    assert interface2.protocol_up == False
-    assert interface1.status == ('down', 'down')
-    assert interface2.status == ('admin down', 'down')
+    while event.wait:
+        with event.conditions:
+            assert interface1.upup == False
+            assert interface2.upup == False
+            assert interface1.protocol_up == False
+            assert interface2.protocol_up == False
+            assert interface1.status == ('down', 'down')
+            assert interface2.status == ('admin down', 'down')
 
+    # Bring the interfaces back up.
     interface2.no_shutdown()
-    time.sleep(0.5)
+    while event.wait:
+        with event.conditions:
+            assert interface1.upup == True
+            assert interface2.upup == True
 
-    device2.shutdown()
-    time.sleep(0.5)
-    assert interface1.upup == False
-    assert interface2.upup == False
-    assert interface1.protocol_up == False
-    assert interface2.protocol_up == False
-    assert interface1.status == ('down', 'down')
-    assert interface2.status == ('down', 'down')
+    # Shutdown our device and make sure both interfaces go down.
+    device1.shutdown()
+    while event.wait:
+        with event.conditions:
+            assert interface1.upup == False
+            assert interface2.upup == False
+            assert interface1.protocol_up == False
+            assert interface2.protocol_up == False
+            assert interface1.status == ('down', 'down')
+            assert interface2.status == ('down', 'down')
 
 def test_interface_send_receive(network):
+    """
+    Test interface can send/receive from the reference interface.
+    """
+    event = netscool.Event()
     device1, device2 = network
     interface1 = device1.interfaces[0]
     interface2 = device2.interfaces[0]
 
-    good_frame = Ether(src=interface1.mac, dst=interface2.mac)
-    wrong_dst_frame = Ether(src=interface1.mac, dst='00:00:00:00:00:00')
+    # Wait for interfaces to come up.
+    while event.wait:
+        with event.conditions:
+            assert interface1.upup
+            assert interface2.upup
+
     bad_frame = b'aaa'
+    wrong_dst_frame = Ether(src=interface1.mac, dst='00:00:00:00:00:00')
+    good_frame = Ether(src=interface1.mac, dst=interface2.mac)
 
-    interface1.send(good_frame)
-    time.sleep(0.5)
-    assert device2.last_frame == good_frame
-    device2.last_frame = None
-
-    interface1.send(wrong_dst_frame)
-    time.sleep(0.5)
-    assert device2.last_frame == None
-
-    interface2.promiscuous = True
-    interface1.send(wrong_dst_frame)
-    time.sleep(0.5)
-    assert device2.last_frame == wrong_dst_frame
-    interface2.promiscuous = False
-    device2.last_frame = None
-
+    # It is very difficult to prove bad_frame and wrong_dst_frame are
+    # never received. If the other interface sees good_frame but not the
+    # others then we can be pretty sure they will never be received.
     interface1.send(bad_frame)
-    time.sleep(0.5)
-    assert device2.last_frame == None
+    interface1.send(wrong_dst_frame)
+    interface1.send(good_frame)
+    while event.wait:
+        with event.conditions:
+            # bad_frame is not valid at all so shouldnt be sent out
+            # interface1 to begin with and definitely shouldnt be seen by
+            # interface2
+            assert not interface1.captured(bad_frame)
+            assert not interface2.captured(bad_frame)
+
+            # wrong_dst_frame should be sent out interface1 but should be
+            # dropped by interface2.
+            assert interface1.captured(wrong_dst_frame, netscool.DIR_OUT)
+            assert not interface2.captured(wrong_dst_frame)
+
+            # good_frame should be seen by both interfaces.
+            assert interface2.captured(good_frame, netscool.DIR_IN)
+            assert interface1.captured(good_frame, netscool.DIR_OUT)
+
+    interface1.clear_capture()
+    interface2.clear_capture()
+
+    # Send frames in the opposite direction to make sure our
+    # implementation can also receive properly.
+    wrong_dst_frame = Ether(src=interface2.mac, dst='00:00:00:00:00:00')
+    good_frame = Ether(src=interface2.mac, dst=interface1.mac)
+
+    interface2.send(bad_frame)
+    interface2.send(wrong_dst_frame)
+    interface2.send(good_frame)
+    while event.wait:
+        with event.conditions:
+            assert not interface2.captured(bad_frame)
+            assert not interface1.captured(bad_frame)
+
+            assert interface2.captured(wrong_dst_frame, netscool.DIR_OUT)
+            assert not interface1.captured(wrong_dst_frame)
+
+            assert interface2.captured(good_frame, netscool.DIR_OUT)
+            assert interface1.captured(good_frame, netscool.DIR_IN)
+
+    interface1.clear_capture()
+    interface2.clear_capture()
+
+    # Set our interface as promiscuous and make sure we receive
+    # wrong_dst_frame as well as good_frame. 
+    interface1.promiscuous = True
+
+    interface2.send(bad_frame)
+    interface2.send(wrong_dst_frame)
+    interface2.send(good_frame)
+    while event.wait:
+        with event.conditions:
+            assert not interface2.captured(bad_frame)
+            assert not interface1.captured(bad_frame)
+
+            assert interface2.captured(wrong_dst_frame, netscool.DIR_OUT)
+            assert interface1.captured(wrong_dst_frame, netscool.DIR_IN)
+
+            assert interface2.captured(good_frame, netscool.DIR_OUT)
+            assert interface1.captured(good_frame, netscool.DIR_IN)
+
+    interface1.clear_capture()
+    interface2.clear_capture()

@@ -16,13 +16,6 @@ class L2Device(netscool.layer1.BaseDevice):
     """
     A basic layer 2 device that just logs any frame it receives.
     """
-    def __init__(self, name, interfaces):
-        super().__init__(name, interfaces)
-
-        # Keep track of the last frame the device received to make testing
-        # easier.
-        self.last_frame = None
-
     def event_loop(self):
         """ Log each frame the device receives. """
         logger = logging.getLogger("netscool.layer2.device.receive")
@@ -35,8 +28,6 @@ class L2Device(netscool.layer1.BaseDevice):
             logger.info(
                 '{} got frame\n{}'.format(self, frame.show(dump=True)))
 
-            self.last_frame = frame
-                
 class L2Interface(netscool.layer1.L1Interface):
     """ A Layer 2 interface. """
 
@@ -156,138 +147,139 @@ class L2Interface(netscool.layer1.L1Interface):
         return "{} ({})".format(super().__str__(), self.mac)
 
 
-@netscool.implementation('lesson2')
-class Switch(netscool.layer1.BaseDevice):
+#@netscool.implementation('lesson2')
+#class Switch(netscool.layer1.BaseDevice):
+#
+#    CAMEntry = collections.namedtuple(
+#        'CAMEntry', ['interface', 'last_seen'])
+#
+#    def __init__(self, name, mac, interfaces):
+#        super().__init__(name, interfaces)
+#
+#        # On top of each interface having a MAC, the switch also has its
+#        # own MAC. This is used as an identifier in some layer 2
+#        # protocols. You cannot send a frame to this address.
+#        self.mac = mac
+#
+#        # Interfaces in a switch need to be in promiscuous mode because
+#        # they are generally forwarding frames not destined for them. If
+#        # they were not promiscuous they would drop all those frames
+#        # instead of forwarding them.
+#        for interface in self.interfaces:
+#            interface.promiscuous = True
+#
+#        # The CAM (content addressable memory) table that tracks
+#        # interface -> MAC mappings. Once a MAC is 'learned' and in the
+#        # CAM table the switch no longer has to flood frames out every
+#        # interface to deliver the frame.
+#        self.cam = {}
+#
+#        # If we dont see a MAC address for this many seconds, then remove
+#        # the mapping from the table. This timeout removes stale entries
+#        # from the table eg. A device in unplugged.
+#        self.cam_timeout = 300
+#
+#    def show_cam(self):
+#        """
+#        Print out current entries in the switch CAM table.
+#        """
+#        now = time.time()
+#
+#        print('MAC\t\t\tInterface\tExpires')
+#        print('-' * 55)
+#        for mac, entry in self.cam.items():
+#            expires = int((entry.last_seen + self.cam_timeout) - now)
+#            print("{}\t{}\t\t{}".format(
+#                mac, entry.interface.name, expires))
+#
+#    def event_loop(self):
+#        """
+#        Receive frames and forward them out appropriate interfaces.
+#        """
+#        logger_cam = logging.getLogger('netscool.layer2.switch.cam')
+#        logger_recv = logging.getLogger('netscool.layer2.switch.receive')
+#        self._timeout_cam_entries()
+#
+#        for interface in self.interfaces:
+#            frame = interface.receive()
+#            if not frame:
+#                continue
+#
+#            # We have nothing to do with frames send directly to us for
+#            # now, so log and ignore.
+#            if self._is_local_frame(frame):
+#                logger_recv.info("{} Received Frame".format(self))
+#                continue
+#
+#            src_mac = frame.src.lower()
+#            dst_mac = frame.dst.lower()
+#
+#            logger_cam.info(
+#                "{} Update CAM entry {} -> {}".format(
+#                    self, src_mac, interface.name))
+#            self.cam[src_mac] = Switch.CAMEntry(interface, time.time())
+#
+#            if dst_mac in self.cam:
+#                logger_cam.info(
+#                    "{} CAM entry found {}, sending frame".format(
+#                        self, dst_mac))
+#                self.cam[dst_mac].interface.send(frame)
+#            else:
+#                logger_cam.info(
+#                    "{} CAM entry not found {}, flooding frame".format(
+#                        self, dst_mac))
+#                self._flood(interface, frame)
+#
+#    def _is_local_frame(self, frame):
+#        """
+#        Check if this frame destined for any of our local interfaces.
+#
+#        :param frame: Received frame.
+#        :returns: True or False
+#        """
+#        for interface in self.interfaces:
+#            if frame.dst.lower() == interface.mac.lower():
+#                return True
+#        return False
+#
+#    def _flood(self, src_interface, frame):
+#        """
+#        Flood frame out all interfaces, except src_interface.
+#
+#        :param src_interface: The interface that received the frame.
+#        :param frame: The frame to flood.
+#        """
+#        for interface in self.interfaces:
+#            if not interface.upup:
+#                continue
+#            if interface == src_interface:
+#                continue
+#            interface.send(frame)
+#
+#    def _timeout_cam_entries(self):
+#        """
+#        Remove any CAM entries we haven't seen frames for, for
+#        ``cam_timeout`` seconds.
+#        """
+#        logger = logging.getLogger('netscool.layer2.switch.cam')
+#        now = time.time()
+#        to_remove = []
+#        for mac, entry in self.cam.items():
+#            if now - self.cam_timeout > entry.last_seen:
+#                to_remove.append(mac)
+#
+#        # Python doesnt like it when you modify a dictionary you are
+#        # iterating, so we flag entries for removal, then remove them in
+#        # this second loop.
+#        for mac in to_remove:
+#            logger.info("{} timeout CAM entry {}".format(self, mac))
+#            self.cam.pop(mac)
+#
+#    def __str__(self):
+#        return "{} ({})".format(super().__str__(), self.mac)
 
-    CAMEntry = collections.namedtuple(
-        'CAMEntry', ['interface', 'last_seen'])
-
-    def __init__(self, name, mac, interfaces):
-        super().__init__(name, interfaces)
-
-        # On top of each interface having a MAC, the switch also has its
-        # own MAC. This is used as an identifier in some layer 2
-        # protocols. You cannot send a frame to this address.
-        self.mac = mac
-
-        # Interfaces in a switch need to be in promiscuous mode because
-        # they are generally forwarding frames not destined for them. If
-        # they were not promiscuous they would drop all those frames
-        # instead of forwarding them.
-        for interface in self.interfaces:
-            interface.promiscuous = True
-
-        # The CAM (content addressable memory) table that tracks
-        # interface -> MAC mappings. Once a MAC is 'learned' and in the
-        # CAM table the switch no longer has to flood frames out every
-        # interface to deliver the frame.
-        self.cam = {}
-
-        # If we dont see a MAC address for this many seconds, then remove
-        # the mapping from the table. This timeout removes stale entries
-        # from the table eg. A device in unplugged.
-        self.cam_timeout = 300
-
-    def show_cam(self):
-        """
-        Print out current entries in the switch CAM table.
-        """
-        now = time.time()
-
-        print('MAC\t\t\tInterface\tExpires')
-        print('-' * 55)
-        for mac, entry in self.cam.items():
-            expires = int((entry.last_seen + self.cam_timeout) - now)
-            print("{}\t{}\t\t{}".format(
-                mac, entry.interface.name, expires))
-
-    def event_loop(self):
-        """
-        Receive frames and forward them out appropriate interfaces.
-        """
-        logger_cam = logging.getLogger('netscool.layer2.switch.cam')
-        logger_recv = logging.getLogger('netscool.layer2.switch.receive')
-        self._timeout_cam_entries()
-
-        for interface in self.interfaces:
-            frame = interface.receive()
-            if not frame:
-                continue
-
-            # We have nothing to do with frames send directly to us for
-            # now, so log and ignore.
-            if self._is_local_frame(frame):
-                logger_recv.info("{} Received Frame".format(self))
-                continue
-
-            src_mac = frame.src.lower()
-            dst_mac = frame.dst.lower()
-
-            logger_cam.info(
-                "{} Update CAM entry {} -> {}".format(
-                    self, src_mac, interface.name))
-            self.cam[src_mac] = Switch.CAMEntry(interface, time.time())
-
-            if dst_mac in self.cam:
-                logger_cam.info(
-                    "{} CAM entry found {}, sending frame".format(
-                        self, dst_mac))
-                self.cam[dst_mac].interface.send(frame)
-            else:
-                logger_cam.info(
-                    "{} CAM entry not found {}, flooding frame".format(
-                        self, dst_mac))
-                self._flood(interface, frame)
-
-    def _is_local_frame(self, frame):
-        """
-        Check if this frame destined for any of our local interfaces.
-
-        :param frame: Received frame.
-        :returns: True or False
-        """
-        for interface in self.interfaces:
-            if frame.dst.lower() == interface.mac.lower():
-                return True
-        return False
-
-    def _flood(self, src_interface, frame):
-        """
-        Flood frame out all interfaces, except src_interface.
-
-        :param src_interface: The interface that received the frame.
-        :param frame: The frame to flood.
-        """
-        for interface in self.interfaces:
-            if not interface.upup:
-                continue
-            if interface == src_interface:
-                continue
-            interface.send(frame)
-
-    def _timeout_cam_entries(self):
-        """
-        Remove any CAM entries we haven't seen frames for, for
-        ``cam_timeout`` seconds.
-        """
-        logger = logging.getLogger('netscool.layer2.switch.cam')
-        now = time.time()
-        to_remove = []
-        for mac, entry in self.cam.items():
-            if now - self.cam_timeout > entry.last_seen:
-                to_remove.append(mac)
-
-        # Python doesnt like it when you modify a dictionary you are
-        # iterating, so we flag entries for removal, then remove them in
-        # this second loop.
-        for mac in to_remove:
-            logger.info("{} timeout CAM entry {}".format(self, mac))
-            self.cam.pop(mac)
-
-    def __str__(self):
-        return "{} ({})".format(super().__str__(), self.mac)
-
-@netscool.implementation('lesson3')
+#@netscool.implementation('lesson3')
+#@netscool.implementation('default')
 class Switch(netscool.layer1.BaseDevice):
 
     CAMKey = collections.namedtuple('CAMKey', ['mac', 'vlan'])

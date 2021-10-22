@@ -1,16 +1,12 @@
-from .event import Event
-from .capture import write_pcap
-from .capture import clear_captures
-
-from .layer1 import DIR_OUT
-from .layer1 import DIR_IN
-
 import os
+import re
 import sys
+import inspect
+import importlib
 
 def _answers_module(lesson_name):
-    # Import test_<lesson_name>.py
-    import importlib
+    # Import the tests/lessons/test_<lesson_name>.py module. This module
+    # should provide example implementations for a lesson.
     path = os.path.join(os.path.dirname(__file__), '../tests/lessons')
     sys.path.append(path)
     module_name = "test_{}".format(lesson_name)
@@ -35,11 +31,6 @@ def _answers(_locals):
     # This function must be called after the classes to be overwritten
     # have been declared.
     # Example usages: netscool._answers(locals())
-
-    # Import these here to avoid unnecessary imports when importing
-    # netscool.
-    import re
-    import inspect
 
     # Make a backup of sys.path so we can restore it when we are done.
     orig_path = sys.path.copy()

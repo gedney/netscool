@@ -8,6 +8,7 @@ import struct
 import threading
 import socket
 import select
+import collections
 
 LINE_DOWN = 'down'
 LINE_UP = 'up'
@@ -30,6 +31,11 @@ class BaseDevice():
         self._thread = None
         self.interfaces = interfaces
         self.name = name
+        self._event_loop_exception = None
+
+    @property
+    def event_loop_exception(self):
+        return self._event_loop_exception
 
     def show_interfaces(self):
         """
@@ -130,6 +136,9 @@ class BaseDevice():
         """
         Wrapper for event_loop() that handles the shutdown event.
         """
+
+        # Reset any exceptions from previous runs of the event_loop.
+        self._event_loop_exception = None
         try:
             while not self._shutdown_event.is_set():
                 with BaseDevice._lock:
@@ -145,12 +154,21 @@ class BaseDevice():
 
                     self.event_loop()
                 time.sleep(0.1)
+        except Exception as e:
+            logging.exception("Error in {} event loop".format(self.name))
+            self._event_loop_exception = e
         finally:
             self._shutdown_event.set()
             self._internal_shutdown()
 
     def __str__(self):
         return self.name
+
+MAX_CAPTURE = 100
+DIR_IN = "IN"
+DIR_OUT = "OUT"
+Capture = collections.namedtuple(
+    "Capture", ["time", "direction", "data"])
 
 class BaseInterface():
     """
@@ -159,13 +177,106 @@ class BaseInterface():
     higher level interfaces build on this base functionality.
     """
     def __init__(self, name):
-        #self.line_status = LINE_DOWN
         self.name = name
 
         self.cable = None
         self.recv_buffer = []
         self.send_buffer = []
         self._powered = False
+
+        self._capture = []
+
+        # Replace send and receive with wrappers that capture data
+        # being sent and received by the interface. We keep references
+        # to the 'real' send and receive so that the 'capture' variants
+        # can still actually send and receive data.
+        self._real_receive = self.receive
+        self._real_send = self.send
+        self.receive = self._capture_receive
+        self.send = self._capture_send
+
+    def captured(self, data, direction=None):
+        """
+        Was the given 'data' captured by the interface. Only checks if
+        the exact bytes were captured, doesnt attempt to find the 'data'
+        if it is encapsulated.
+
+        :param data: The bytes to search for.
+        :param direction: Optionally check the bytes were captured going
+            in or out of the interface. Valid values are "IN" 
+            (netscool.layer1.DIR_IN), "OUT" (netscool.layer1.DIR_OUT), or 
+            None
+        :returns: True or False.
+        """
+        if not isinstance(data, bytes):
+            data = bytes(data)
+            #raise Exception(
+            #    "Can only check interface captures for bytes not"
+            #    " {}".format(type(data)))
+
+        for capture in self._capture:
+            if capture.data != data:
+                continue
+            if direction is not None and capture.direction != direction:
+                continue
+            return True
+        return False
+
+    @property
+    def capture(self):
+        """
+        Get a list of the last MAX_CAPTURES worth of captured data.
+        """
+        return self._capture.copy()
+
+    def clear_capture(self):
+        """
+        Clear any previous captures.
+        """
+        self._capture = []
+
+    def _capture_receive(self, *args, **kwargs):
+        """
+        Capture any data the interface receives. The captured data will
+        only be data that is valid for the inherited interface receive
+        eg. Layer 2 frames dropped because they have the wrong source
+        MAC will not be captured. Only keeps the last MAX_CAPTURES worth
+        of messages.
+        """
+        data = self._real_receive(*args, **kwargs)
+        if data != None:
+            capture = Capture(
+                time=time.time(), direction=DIR_IN,
+                data=bytes(data))
+            self._capture.append(capture)
+            self._capture = self._capture[-MAX_CAPTURE:]
+        return data
+
+    def _capture_send(self, *args, **kwargs):
+        """
+        Capture any data the interface sends. The captured data will only
+        be data that is valid for the inherited interface send. If the
+        inherited interface drops the data it will not be captured. Only
+        keeps the last MAX_CAPTURES worth of messages.
+        """
+        # We check the send buffer before and after the send. Anything
+        # new in the send buffer is data that has been successfully sent.
+        # There is a small race condition that the send buffer will be
+        # drained between _real_send and assigning post_buffer. If this
+        # becomes a recurring issue i'll add some locks around the
+        # send_buffer.
+        pre_buffer = set(self.send_buffer)
+        self._real_send(*args, **kwargs)
+        post_buffer = set(self.send_buffer)
+
+        capture = [
+            Capture(
+                time=time.time(), direction=DIR_OUT,
+                data=bytes(data))
+            for data in post_buffer - pre_buffer]
+
+        self._capture += capture
+        self._capture = self._capture[-MAX_CAPTURE:]
 
     @property
     def powered(self):
@@ -186,6 +297,9 @@ class BaseInterface():
         Plug a cable into the interface.
         """
         cable.plugin(self)
+
+    def unplug_cable(self, cable):
+        cable.unplug(self)
 
     def update(self):
         self.negotiate_connection()
@@ -215,11 +329,6 @@ class L1Interface(BaseInterface):
         # TODO check both ends speed match.
         self.speed = speed
         self.line_status = LINE_DOWN
-
-        #self.cable = None
-        #self.recv_buffer = []
-        #self.send_buffer = []
-        #self._powered = False
 
     @property
     def status(self):
@@ -330,6 +439,12 @@ class BaseCable():
         """
         raise NotImplementedError(
             "'plugin' not implemented for this cable.")
+    def unplug(self, interface):
+        """
+        Unplug the cable from the specified interface.
+        """
+        raise NotImplementedError(
+            "'unplug' not implemented for this cable.")
 
 class Cable(BaseCable):
     """
@@ -399,6 +514,22 @@ class Cable(BaseCable):
         else:
             raise Exception("Both cable ends already plugged in")
         interface.cable = self
+
+    def unplug(self, interface):
+        """
+        Unplug one end of the cable from the specified interface.
+        Fails if the cable isnt plugged into the specified interface.
+        """
+        assert interface.cable == self, (
+            "Interface not plugged into this cable.")
+        if self.end1 == interface:
+            self.end1 = None
+        elif self.end2 == interface:
+            self.end2 = None
+        else:
+            raise Exception("Interface not plugged into cable.")
+        interface.cable = None
+        self.update()
 
 SOCKET_CABLE_HEARTBEAT = b'\0'
 class SocketCable(BaseCable):
@@ -500,6 +631,19 @@ class SocketCable(BaseCable):
         assert self.end == None, "Cable already plugged in."
         interface.cable = self
         self.end = interface
+
+    def unplug(self, interface):
+        """
+        Unplug interface from this end of the socket cable. Will fail if
+        interface is not plugged into this end of the socket cable.
+        """
+        assert interface.cable == self, (
+            "Interface not plugged into this cable.")
+        assert self.end == interface, (
+            "Cable not plugged into specified interface.")
+        interface.cable = None
+        self.end = None
+        self.update()
 
     def _transmit(self, data):
         assert len(data) <= self.mtu

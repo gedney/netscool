@@ -2,8 +2,8 @@ from scapy.all import Ether
 
 import IPython
 
-import netscool
-netscool.lesson('lesson1')
+#import netscool
+#netscool.lesson('lesson1')
 
 import netscool.layer1
 import netscool.layer2

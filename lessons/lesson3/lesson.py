@@ -2,8 +2,8 @@ import collections
 from scapy.all import Ether, Dot1Q
 import IPython
 
-import netscool
-netscool.lesson('lesson3')
+#import netscool
+#netscool.lesson('lesson3')
 
 import netscool.layer1
 

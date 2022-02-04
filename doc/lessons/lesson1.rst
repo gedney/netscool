@@ -35,7 +35,7 @@ Each side of the network has one layer 2 device (``L2Device``), and each device 
 What Do?
 --------
 
-Open ``lesson.py`` and start filling in the methods for the ``L2Interface`` class.
+Open ``lesson.py`` and start filling in the methods for the ``L2Interface`` class. The ``TODO`` comments give a good indication of where you need to add code.
 
 Very Good... But What Is An "L2Interface"?
 ------------------------------------------
@@ -54,7 +54,7 @@ Each ``Ethernet`` message is called frame. We can't send frames across our link 
  * up/down - We are getting activity across the line, but ``Ethernet`` can't make sense of it.
  * up/up - The interface is working and ready to send/receive.
 
-Luckily for us our layer 1 is already sending discreet chunks of data, so our layer 2 interface doesnt have much work to do.
+Luckily for us our layer 1 is already sending discreet chunks of data, so our layer 2 interface doesnt have much work to do to turn the chunks into frames.
 
 Once the interface is up/up we can send frames across the link. Every layer 2 interface has a MAC address, which is a unique identifier for that interface (duplicate MAC addresses cause bad times). Every ``Ethernet`` frame has a source and destination MAC address, which are the interface that sent the frame, and interface it is destined for. Normally an interface will drop any frame it receives if the destination MAC doesnt match its MAC address. There are some situations where we still want to process a frame even if it isn't addressed to us. In this case we can put the interface into promiscuos mode, and it will process any frame it receives regardless of the destination MAC of the frame.
 

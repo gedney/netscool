@@ -25,6 +25,12 @@ class BaseDevice():
     # of a devices event loop cannot be interrupted by another device.
     # This makes reading logs and debugging easier because they cant
     # interleave.
+    # TODO: This does not remove all race conditions. There is no
+    # synchronisation between the ipython interactive thread and each
+    # device thread. This means plugging/unplugging cables can cause
+    # a device to crash (and probably numerous other race conditions).
+    # This requires some serious thought to fix and has so far not
+    # been an issue in practice, so im kicking the can down the road.
     _lock = threading.Lock()
     def __init__(self, name, interfaces):
         self._shutdown_event = threading.Event()
@@ -210,9 +216,6 @@ class BaseInterface():
         """
         if not isinstance(data, bytes):
             data = bytes(data)
-            #raise Exception(
-            #    "Can only check interface captures for bytes not"
-            #    " {}".format(type(data)))
 
         for capture in self._capture:
             if capture.data != data:

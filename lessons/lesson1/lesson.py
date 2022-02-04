@@ -20,10 +20,9 @@ class L2Device(netscool.layer1.BaseDevice):
             if not frame:
                 continue
 
-            # Print or log the frame here.
+            # TODO: Print or log the frame here.
             # Hint: frame.show(dump=True) will give a string will the
             # full details of the frame.
-            pass
 
 class L2Interface(netscool.layer1.L1Interface):
     """ A Layer 2 interface. """
@@ -50,6 +49,7 @@ class L2Interface(netscool.layer1.L1Interface):
     @property
     def protocol_up(self):
         """ Is the protocol status up (Layer2 connectivity). """
+        # TODO: Return the protocol status for the interface.
         pass
 
     @property
@@ -58,6 +58,7 @@ class L2Interface(netscool.layer1.L1Interface):
         True if the layer 1 line status and layer 2 protocol status are
         both up.
         """
+        # TODO: Return True or False if interface is up/up or not.
         # Hint: L1Interface has a line_status member indicating the
         # status of the layer 1 link status.
         pass
@@ -68,6 +69,7 @@ class L2Interface(netscool.layer1.L1Interface):
         Get a tuple of the layer 1 line status and layer 2 protocol status
         for the interface.
         """
+        # TODO: Return tuple of (line status, protocol status).
         # Hint: L1Interface has a line_status member indicating the
         # status of the layer 1 link status.
         pass
@@ -90,6 +92,7 @@ class L2Interface(netscool.layer1.L1Interface):
         # (yet), and are only implementing one layer 2 protocol (Ethernet)
         # so the only reason for our layer 2 protocol to be down at the
         # moment is if the layer 1 link is not up.
+        # TODO: Determine the protocol status for the interface.
         pass
 
     def receive(self):
@@ -98,6 +101,11 @@ class L2Interface(netscool.layer1.L1Interface):
 
         :returns: Scapy Ether object of frame or None.
         """
+        # This receives data from layer 1.
+        data = super().receive()
+        if not data:
+            return None
+
         # There a few things that should be done when receiving a layer 2
         # frame
         #  * Check the layer 1 link and layer 2 protocol up ie. interface
@@ -112,11 +120,7 @@ class L2Interface(netscool.layer1.L1Interface):
         # Note: Ether(data) will throw an exception if data is not a valid
         # frame. Any unhandled exceptions will cause our device to
         # 'crash'. Be careful to handle exceptions appropriately.
-
-        # This receives data from layer 1.
-        data = super().receive()
-        if not data:
-            return None
+        # TODO: Convert layer 1 data to layer 2 frame.
         pass
 
     def send(self, frame):
@@ -130,9 +134,10 @@ class L2Interface(netscool.layer1.L1Interface):
         #    up/up
         #  * Is the frame valid. We consider the frame valid if it is a
         #    Scapy Ether object.
+        # TODO: Make sure we are sending a valid layer 2 frame.
 
         # This will send our frame to layer 1, where it will be sent
-        # across the cable the other attached interface.
+        # across the cable to the other attached interface.
         super().send(bytes(frame))
 
     def __str__(self):

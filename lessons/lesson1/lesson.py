@@ -21,7 +21,7 @@ class L2Device(netscool.layer1.BaseDevice):
                 continue
 
             # TODO: Print or log the frame here.
-            # Hint: frame.show(dump=True) will give a string will the
+            # Hint: frame.show(dump=True) will give a string with the
             # full details of the frame.
 
 class L2Interface(netscool.layer1.L1Interface):

@@ -2,7 +2,7 @@ import time
 import logging
 
 import pytest
-from scapy.all import Ether
+from scapy.all import Ether, Dot1Q
 
 import netscool
 import netscool.layer1
@@ -18,6 +18,9 @@ def l2device_network(request):
     L2Device and L2Interface classes to use for dev0, and the same for
     dev1.
     """
+
+    # Parameterising the L2Device and L2Interface classes means we can test
+    # multiple similar implementations with the same tests.
     L2Device0, L2Interface0, L2Device1, L2Interface1 = request.param
     dev0 = L2Device0("dev0", [
         L2Interface0("0/0", "11:11:11:11:11:11")
@@ -51,6 +54,14 @@ def l2device_network(request):
 
 @pytest.fixture
 def switch_network(request):
+    """
+    One Switch with 3 interfaces, with a L2Device connected to each interface.
+    The 2 parameters are the Switch and SwitchInterface classes to use for the
+    switch.
+    """
+
+    # Parameterising the Switch and SwitchInterface classes means we can test
+    # multiple similar implementations with the same tests.
     Switch, SwitchInterface = request.param
     switch = Switch(
         'sw0', '00:00:00:00:00:00', [
@@ -107,6 +118,114 @@ def switch_network(request):
                 assert not device1.powered
                 assert not device2.powered
                 assert not switch.powered
+
+@pytest.fixture
+def switch_vlan_network(request):
+    """
+    Two Switches with two L2Devices on each in different VLANs, and a trunk link
+    connecting the two switches.
+
+    |dev0 vlan100| --              -- |dev2 vlan100|
+                     |sw0| -- |sw1|
+    |dev1 vlan100| --              -- |dev3 vlan200|
+    """
+
+    # Parameterising the Switch and SwitchInterface classes means we can
+    # test multiple similar implementations with the same tests.
+    Switch, SwitchInterface = request.param
+
+    sw0 = Switch(
+        'sw0', '00:00:00:00:00:00', [
+            SwitchInterface('0/0', '00:00:00:00:00:01'),
+            SwitchInterface('0/1', '00:00:00:00:00:02'),
+            SwitchInterface('0/2', '00:00:00:00:00:03')])
+
+    sw1 = Switch(
+        'sw1', '00:00:00:00:00:00', [
+            SwitchInterface('0/0', '00:00:00:00:00:11'),
+            SwitchInterface('0/1', '00:00:00:00:00:12'),
+            SwitchInterface('0/2', '00:00:00:00:00:13')])
+
+    dev0 = netscool.layer2.L2Device(
+        'dev0', [
+            netscool.layer2.L2Interface('0/0', '11:11:11:11:11:00')])
+    dev1 = netscool.layer2.L2Device(
+        'dev1', [
+            netscool.layer2.L2Interface('0/0', '11:11:11:11:11:01')])
+    dev2 = netscool.layer2.L2Device(
+        'dev2', [
+            netscool.layer2.L2Interface('0/0', '11:11:11:11:11:02')])
+    dev3 = netscool.layer2.L2Device(
+        'dev3', [
+            netscool.layer2.L2Interface('0/0', '11:11:11:11:11:03')])
+
+    cable = netscool.layer1.Cable()
+    sw0.interface('0/1').plug_cable(cable)
+    dev0.interface('0/0').plug_cable(cable)
+
+    cable = netscool.layer1.Cable()
+    sw0.interface('0/2').plug_cable(cable)
+    dev1.interface('0/0').plug_cable(cable)
+
+    cable = netscool.layer1.Cable()
+    sw1.interface('0/1').plug_cable(cable)
+    dev2.interface('0/0').plug_cable(cable)
+
+    cable = netscool.layer1.Cable()
+    sw1.interface('0/2').plug_cable(cable)
+    dev3.interface('0/0').plug_cable(cable)
+
+    cable = netscool.layer1.Cable()
+    sw0.interface('0/0').plug_cable(cable)
+    sw1.interface('0/0').plug_cable(cable)
+
+    sw0.interface('0/0').set_trunk_port()
+    sw1.interface('0/0').set_trunk_port()
+
+    sw0.interface('0/1').set_access_port(100)
+    sw1.interface('0/1').set_access_port(100)
+
+    sw0.interface('0/2').set_access_port(100)
+    sw1.interface('0/2').set_access_port(200)
+
+    event = netscool.Event()
+    try:
+        sw0.start()
+        sw1.start()
+        dev0.start()
+        dev1.start()
+        dev2.start()
+        dev3.start()
+        while event.wait:
+            with event.conditions:
+                assert dev0.interface('0/0').upup
+                assert dev1.interface('0/0').upup
+                assert dev2.interface('0/0').upup
+                assert dev3.interface('0/0').upup
+                assert sw0.interface('0/0').upup
+                assert sw0.interface('0/1').upup
+                assert sw0.interface('0/2').upup
+                assert sw1.interface('0/0').upup
+                assert sw1.interface('0/1').upup
+                assert sw1.interface('0/2').upup
+        yield sw0, sw1, dev0, dev1, dev2, dev3
+
+    finally:
+        sw0.shutdown()
+        sw1.shutdown()
+        dev0.shutdown()
+        dev1.shutdown()
+        dev2.shutdown()
+        dev3.shutdown()
+
+        while event.wait:
+            with event.conditions:
+                assert not dev0.powered
+                assert not dev1.powered
+                assert not dev2.powered
+                assert not dev3.powered
+                assert not sw0.powered
+                assert not sw1.powered
 
 @pytest.mark.parametrize(
     'l2device_network', [
@@ -459,7 +578,6 @@ def test_switch_flood(switch_network):
             assert not dev2.interface('0/0').captured(dev1_to_dev0)
     netscool.clear_captures(dev0, dev1, dev2, switch)
 
-
 @pytest.mark.parametrize(
     'switch_network', [
         # Test reference Switch.
@@ -504,3 +622,254 @@ def test_switch_cam_timeout(switch_network):
     # The cam timeout doesnt happen at the exact time. As long as its
     # within a reasonable range thats fine.
     assert switch.cam_timeout <= time.time() - start <= switch.cam_timeout + 1
+
+@pytest.mark.parametrize(
+    'switch_vlan_network', [
+        # Test reference Switch.
+        (
+            netscool.layer2.Switch,
+            netscool.layer2.SwitchPort
+        )],
+    indirect=True)
+def test_vlan_send(switch_vlan_network):
+
+    event = netscool.Event()
+    sw0, sw1, dev0, dev1, dev2, dev3 = switch_vlan_network
+
+    # Send from dev0 -> dev2 on vlan 100
+    # Should only see traffic on vlan 100 interfaces.
+    # Frame should be flooded to all vlan100 interfaces
+    dev0_to_dev2 = Ether(
+        src=dev0.interface('0/0').mac, dst=dev2.interface('0/0').mac)
+    dev0.interface('0/0').send(dev0_to_dev2)
+    while event.wait:
+        with event.conditions:
+
+            # Frame is only received by intended device.
+            assert dev2.interface('0/0').captured(dev0_to_dev2, netscool.DIR_IN)
+            assert not dev1.interface('0/0').captured(dev0_to_dev2)
+            assert not dev3.interface('0/0').captured(dev0_to_dev2)
+
+            # Frame is flooded out every interface in vlan100 and not the
+            # vlan200 interface.
+            assert len(sw0.interface('0/0').capture) == 1
+            assert len(sw1.interface('0/0').capture) == 1
+            assert len(sw0.interface('0/1').capture) == 1
+            assert len(sw1.interface('0/1').capture) == 1
+            assert len(sw0.interface('0/2').capture) == 1
+            assert len(sw1.interface('0/2').capture) == 0
+
+            # Check a vlan 100 tagged frame is sent across the trunk link.
+            assert_vlan_frame(
+                cap=sw0.interface('0/0').capture[0],
+                src_mac=dev0.interface('0/0').mac,
+                dst_mac=dev2.interface('0/0').mac,
+                vlan=100)
+            assert_vlan_frame(
+                cap=sw1.interface('0/0').capture[0],
+                src_mac=dev0.interface('0/0').mac,
+                dst_mac=dev2.interface('0/0').mac,
+                vlan=100)
+   
+    netscool.clear_captures(sw0, sw1, dev0, dev1, dev2, dev3)
+     
+    # Send from dev2 -> dev0 on vlan 100
+    # Should only see traffic on vlan 100 interfaces.
+    # Frame should not be flooded.
+    dev2_to_dev0 = Ether(
+        src=dev2.interface('0/0').mac, dst=dev0.interface('0/0').mac)
+    dev2.interface('0/0').send(dev2_to_dev0)
+    while event.wait:
+        with event.conditions:
+
+            # Frame is only received by intended device.
+            assert dev0.interface('0/0').captured(dev2_to_dev0, netscool.DIR_IN)
+            assert not dev1.interface('0/0').captured(dev2_to_dev0)
+            assert not dev3.interface('0/0').captured(dev2_to_dev0)
+
+            # Frame is not flooded, still doesnt go to vlan 200 interface. 
+            assert len(sw0.interface('0/0').capture) == 1
+            assert len(sw1.interface('0/0').capture) == 1
+            assert len(sw0.interface('0/1').capture) == 1
+            assert len(sw1.interface('0/1').capture) == 1
+            assert len(sw0.interface('0/2').capture) == 0
+            assert len(sw1.interface('0/2').capture) == 0
+
+            # Check a vlan 100 tagged frame is sent across the trunk link.
+            assert_vlan_frame(
+                cap=sw0.interface('0/0').capture[0],
+                src_mac=dev2.interface('0/0').mac,
+                dst_mac=dev0.interface('0/0').mac,
+                vlan=100)
+            assert_vlan_frame(
+                cap=sw1.interface('0/0').capture[0],
+                src_mac=dev2.interface('0/0').mac,
+                dst_mac=dev0.interface('0/0').mac,
+                vlan=100)
+
+    netscool.clear_captures(sw0, sw1, dev0, dev1, dev2, dev3)
+
+    # Send from dev0 -> dev3
+    # Should not work, different vlans.
+    dev0_to_dev3 = Ether(
+        src=dev0.interface('0/0').mac, dst=dev3.interface('0/0').mac)
+    dev0.interface('0/0').send(dev0_to_dev3)
+    while event.wait:
+        with event.conditions:
+
+            # Frame is not received by anyone because destination is
+            # in another vlan.
+            assert not dev2.interface('0/0').captured(dev0_to_dev3)
+            assert not dev1.interface('0/0').captured(dev0_to_dev3)
+            assert not dev3.interface('0/0').captured(dev0_to_dev3)
+
+            # Frame is flooded out every interface in vlan100 and not the
+            # vlan200 interface.
+            assert len(sw0.interface('0/0').capture) == 1
+            assert len(sw1.interface('0/0').capture) == 1
+            assert len(sw0.interface('0/1').capture) == 1
+            assert len(sw1.interface('0/1').capture) == 1
+            assert len(sw0.interface('0/2').capture) == 1
+            assert len(sw1.interface('0/2').capture) == 0
+
+@pytest.mark.parametrize(
+    'switch_vlan_network', [
+        # Test reference Switch.
+        (
+            netscool.layer2.Switch,
+            netscool.layer2.SwitchPort
+        )],
+    indirect=True)
+def test_vlan_trunk_allowed(switch_vlan_network):
+    event = netscool.Event()
+    sw0, sw1, dev0, dev1, dev2, dev3 = switch_vlan_network
+
+    # Restrict trunk link to only allow vlan 200.
+    sw0.interface('0/0').set_trunk_port(allowed_vlans=[200])
+    sw1.interface('0/0').set_trunk_port(allowed_vlans=[200])
+
+    dev0_to_dev2 = Ether(
+        src=dev0.interface('0/0').mac, dst=dev2.interface('0/0').mac)
+    dev0.interface('0/0').send(dev0_to_dev2)
+    while event.wait:
+        with event.conditions:
+
+            # Frame is not allowed across trunk link so no-one receives
+            # it.
+            assert not dev1.interface('0/0').captured(dev0_to_dev2)
+            assert not dev2.interface('0/0').captured(dev0_to_dev2)
+            assert not dev3.interface('0/0').captured(dev0_to_dev2)
+
+            # Frame will be flooded to vlan 100 interfaces on sw0 but
+            # doesnt reach sw1.
+            assert len(sw0.interface('0/0').capture) == 0
+            assert len(sw1.interface('0/0').capture) == 0
+            assert len(sw0.interface('0/1').capture) == 1
+            assert len(sw1.interface('0/1').capture) == 0
+            assert len(sw0.interface('0/2').capture) == 1
+            assert len(sw1.interface('0/2').capture) == 0
+
+    netscool.clear_captures(sw0, sw1, dev0, dev1, dev2, dev3)
+
+    dev0_to_dev1 = Ether(
+        src=dev0.interface('0/0').mac, dst=dev1.interface('0/0').mac)
+    dev0.interface('0/0').send(dev0_to_dev1)
+    while event.wait:
+        with event.conditions:
+
+            # Frame doesnt have to cross trunk link so makes it to dev1.
+            assert dev1.interface('0/0').captured(dev0_to_dev1, netscool.DIR_IN)
+            assert not dev2.interface('0/0').captured(dev0_to_dev1)
+            assert not dev3.interface('0/0').captured(dev0_to_dev1)
+
+            # Frame doesnt cross trunk link.
+            assert len(sw0.interface('0/0').capture) == 0
+            assert len(sw1.interface('0/0').capture) == 0
+            assert len(sw0.interface('0/1').capture) == 1
+            assert len(sw1.interface('0/1').capture) == 0
+            assert len(sw0.interface('0/2').capture) == 1
+            assert len(sw1.interface('0/2').capture) == 0
+
+    netscool.clear_captures(sw0, sw1, dev0, dev1, dev2, dev3)
+
+@pytest.mark.parametrize(
+    'switch_vlan_network', [
+        # Test reference Switch.
+        (
+            netscool.layer2.Switch,
+            netscool.layer2.SwitchPort
+        )],
+    indirect=True)
+def test_vlan_trunk_native(switch_vlan_network):
+
+    event = netscool.Event()
+    sw0, sw1, dev0, dev1, dev2, dev3 = switch_vlan_network
+
+    # Put dev0 and dev2 in vlan100
+    sw0.interface('0/1').set_access_port(100)
+    sw1.interface('0/1').set_access_port(100)
+
+    # Put dev1 and dev3 in vlan200. 
+    sw0.interface('0/2').set_access_port(200)
+    sw1.interface('0/2').set_access_port(200)
+
+    # Set the native vlan on the trunk link to vlan 100. Any vlam 100
+    # frames should not be tagged when crossing the trunk link.
+    sw0.interface('0/0').set_trunk_port(native_vlan=100)
+    sw1.interface('0/0').set_trunk_port(native_vlan=100)
+
+    # Send a frame across the trunk link in vlan 100. Shouldnt be tagged.
+    dev0_to_dev2 = Ether(
+        src=dev0.interface('0/0').mac, dst=dev2.interface('0/0').mac)
+    dev0.interface('0/0').send(dev0_to_dev2)
+    while event.wait:
+        with event.conditions:
+
+            # Frame is only received by intended device.
+            assert dev2.interface('0/0').captured(dev0_to_dev2, netscool.DIR_IN)
+            assert not dev1.interface('0/0').captured(dev0_to_dev2)
+            assert not dev3.interface('0/0').captured(dev0_to_dev2)
+
+            assert len(sw0.interface('0/0').capture) == 1
+            assert len(sw1.interface('0/0').capture) == 1
+
+            # The frame was sent unmodified (no tag added) across the
+            # trunk link.
+            assert sw0.interface('0/0').captured(dev0_to_dev2, netscool.DIR_OUT)
+
+    netscool.clear_captures(sw0, sw1, dev0, dev1, dev2, dev3)
+ 
+    # Send a frame across the trunk link in vlan 200. Should be tagged.
+    dev1_to_dev3 = Ether(
+        src=dev1.interface('0/0').mac, dst=dev3.interface('0/0').mac)
+    dev1.interface('0/0').send(dev1_to_dev3)
+    while event.wait:
+        with event.conditions:
+
+            # Frame is only received by intended device.
+            assert dev3.interface('0/0').captured(dev1_to_dev3, netscool.DIR_IN)
+            assert not dev0.interface('0/0').captured(dev0_to_dev2)
+            assert not dev2.interface('0/0').captured(dev0_to_dev2)
+
+            assert len(sw0.interface('0/0').capture) == 1
+            assert len(sw1.interface('0/0').capture) == 1
+
+            # Frame was tagged with vlan200 across trunk link.
+            assert_vlan_frame(
+                cap=sw0.interface('0/0').capture[0],
+                src_mac=dev1.interface('0/0').mac,
+                dst_mac=dev3.interface('0/0').mac,
+                vlan=200)
+
+    netscool.clear_captures(sw0, sw1, dev0, dev1, dev2, dev3)
+
+def assert_vlan_frame(cap, src_mac, dst_mac, vlan):
+    """
+    Utility to assert a captured packet is tagged with a specific vlan.
+    """
+    frame = Ether(cap.data)
+    dot1q = frame.payload
+    assert isinstance(dot1q, Dot1Q)
+    assert frame.dst.lower() == dst_mac.lower()
+    assert frame.src.lower() == src_mac.lower()
+    assert vlan == dot1q.vlan

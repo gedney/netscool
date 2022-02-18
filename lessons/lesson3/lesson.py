@@ -2,9 +2,6 @@ import collections
 from scapy.all import Ether, Dot1Q
 import IPython
 
-#import netscool
-#netscool.lesson('lesson3')
-
 import netscool.layer1
 
 from <your_module> import L2Device, L2Interface, Switch
@@ -141,8 +138,6 @@ def _untag_frame(frame):
     header.type = dot1q.type
     return header/payload
 
-#from netscool.layer2 import L2Device, L2Interface, Switch, SwitchPort
-
 if __name__ == "__main__":
 
     switch0 = Switch(
@@ -198,8 +193,9 @@ import pytest
 # exhaustive list of tests, and you should add any extra tests you think
 # appropriate.
 
-def test_vlan_flood(self):
-    # Test frames only flood to allowed interfaces for a vlan.
+def test_vlan_send(self):
+    # Test you can send frames, and they only flood to allowed interfaces
+    # for a vlan.
     pass
 
 def test_vlan_address(self):

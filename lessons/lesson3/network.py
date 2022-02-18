@@ -1,9 +1,6 @@
 import time
 import IPython
 
-import netscool
-netscool.lesson('lesson3')
-
 import netscool.layer1
 import netscool.layer2
 

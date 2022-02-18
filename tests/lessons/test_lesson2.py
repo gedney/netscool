@@ -1,3 +1,8 @@
+"""
+Test switch implementation for lesson 2 continues to work with reference
+switch which is used in network.py for the lesson. More specific tests
+for this implementation are covered in tests_layer2.py. 
+"""
 import time
 import collections
 
@@ -74,240 +79,6 @@ class Switch(netscool.layer1.BaseDevice):
 
     def __str__(self):
         return "{} ({})".format(super().__str__(), self.mac)
-
-#@pytest.fixture
-#def two_device_network():
-#    switch = Switch(
-#        'sw0', '00:00:00:00:00:00', [
-#            L2Interface('0/0', '00:00:00:00:00:01'),
-#            L2Interface('0/1', '00:00:00:00:00:02')])
-#    device0 = L2Device(
-#        'dev0', [
-#            L2Interface('0/0', '11:11:11:11:11:00')])
-#    device1 = L2Device(
-#        'dev1', [
-#            L2Interface('0/0', '11:11:11:11:11:01')])
-#
-#    cable = netscool.layer1.Cable()
-#    switch.interface('0/0').plug_cable(cable)
-#    device0.interface('0/0').plug_cable(cable)
-#
-#    cable = netscool.layer1.Cable()
-#    switch.interface('0/1').plug_cable(cable)
-#    device1.interface('0/0').plug_cable(cable)
-#
-#    event = netscool.Event()
-#    try:
-#        switch.start()
-#        device0.start()
-#        device1.start()
-#
-#        while event.wait:
-#            with event.conditions:
-#                assert device0.interface('0/0').upup
-#                assert device1.interface('0/0').upup
-#                assert switch.interface('0/0').upup
-#                assert switch.interface('0/1').upup
-#
-#        yield switch, device0, device1
-#
-#    finally:
-#        switch.shutdown()
-#        device0.shutdown()
-#        device1.shutdown()
-#        while event.wait:
-#            with event.conditions:
-#                assert not device0.powered
-#                assert not device1.powered
-#                assert not switch.powered
-#
-#@pytest.fixture
-#def three_device_network():
-#    switch = Switch(
-#        'sw0', '00:00:00:00:00:00', [
-#            L2Interface('0/0', '00:00:00:00:00:01'),
-#            L2Interface('0/1', '00:00:00:00:00:02'),
-#            L2Interface('0/2', '00:00:00:00:00:03')])
-#    device0 = L2Device(
-#        'dev0', [
-#            L2Interface('0/0', '11:11:11:11:11:00')])
-#    device1 = L2Device(
-#        'dev1', [
-#            L2Interface('0/0', '11:11:11:11:11:01')])
-#    device2 = L2Device(
-#        'dev2', [
-#            L2Interface('0/0', '11:11:11:11:11:02')])
-#
-#    cable = netscool.layer1.Cable()
-#    switch.interface('0/0').plug_cable(cable)
-#    device0.interface('0/0').plug_cable(cable)
-#
-#    cable = netscool.layer1.Cable()
-#    switch.interface('0/1').plug_cable(cable)
-#    device1.interface('0/0').plug_cable(cable)
-#
-#    cable = netscool.layer1.Cable()
-#    switch.interface('0/2').plug_cable(cable)
-#    device2.interface('0/0').plug_cable(cable)
-#
-#    event = netscool.Event()
-#    try:
-#        switch.start()
-#        device0.start()
-#        device1.start()
-#        device2.start()
-#        while event.wait:
-#            with event.conditions:
-#                assert device0.interface('0/0').upup
-#                assert device1.interface('0/0').upup
-#                assert device2.interface('0/0').upup
-#                assert switch.interface('0/0').upup
-#                assert switch.interface('0/1').upup
-#                assert switch.interface('0/2').upup
-#        yield switch, device0, device1, device2
-#
-#    finally:
-#        switch.shutdown()
-#        device0.shutdown()
-#        device1.shutdown()
-#        device2.shutdown()
-#
-#        while event.wait:
-#            with event.conditions:
-#                assert not device0.powered
-#                assert not device1.powered
-#                assert not device2.powered
-#                assert not switch.powered
-#
-#def test_populate_cam_table(two_device_network):
-#    """
-#    Test CAM table is properly populated when the switch receives frames.
-#    """
-#    event = netscool.Event()
-#    switch, device0, device1 = two_device_network
-#    to_device0 = Ether(
-#        src='11:11:11:11:11:01', dst='11:11:11:11:11:00')
-#    to_device1 = Ether(
-#        src='11:11:11:11:11:00', dst='11:11:11:11:11:01')
-#
-#    send_interface = device0.interface('0/0')
-#    recv_interface = device1.interface('0/0')
-#    send_interface.send(to_device1)
-#    while event.wait:
-#        with event.conditions:
-#            assert send_interface.captured(to_device1, netscool.DIR_OUT)
-#            assert recv_interface.captured(to_device1, netscool.DIR_IN)
-#
-#            assert len(switch.cam) == 1
-#            mac = send_interface.mac
-#            assert mac in switch.cam
-#            assert switch.cam[mac].interface == switch.interface('0/0')
-#    netscool.clear_captures(device0, device1, switch)
-#
-#    send_interface = device1.interface('0/0')
-#    recv_interface = device0.interface('0/0')
-#    send_interface.send(to_device0)
-#
-#    while event.wait:
-#        with event.conditions:
-#            assert send_interface.captured(to_device0, netscool.DIR_OUT)
-#            assert recv_interface.captured(to_device0, netscool.DIR_IN)
-#
-#            assert len(switch.cam) == 2
-#            mac = send_interface.mac
-#            assert mac in switch.cam
-#            assert switch.cam[mac].interface == switch.interface('0/1')
-#    netscool.clear_captures(device0, device1, switch)
-
-#def test_flood_frames(three_device_network):
-#    """
-#    Test switch appropriately floods frames.
-#    """
-#    event = netscool.Event()
-#    sw, dev0, dev1, dev2 = three_device_network
-#
-#    to_dev0 = Ether(src='11:11:11:11:11:01', dst='11:11:11:11:11:00')
-#    to_dev1 = Ether(src='11:11:11:11:11:00', dst='11:11:11:11:11:01')
-#
-#    # Frame should be flooded to device1 and device2
-#    dev0.interface('0/0').send(to_dev1)
-#    while event.wait:
-#        with event.conditions:
-#
-#            # Frame should got out dev0 but shouldn't be flooded back in.
-#            assert dev0.interface('0/0').captured(
-#                to_dev1, netscool.DIR_OUT)
-#            assert not dev0.interface('0/0').captured(
-#                to_dev1, netscool.DIR_IN)
-#
-#            # Frame should come in 0/0 on switch an be flooded out 0/1 and
-#            # 0/2.
-#            assert sw.interface('0/0').captured(to_dev1, netscool.DIR_IN)
-#            assert sw.interface('0/1').captured(to_dev1, netscool.DIR_OUT)
-#            assert sw.interface('0/2').captured(to_dev1, netscool.DIR_OUT)
-#            assert not sw.interface('0/0').captured(
-#                to_dev1, netscool.DIR_OUT)
-#
-#            # dev1 should get frame.
-#            assert dev1.interface('0/0').captured(to_dev1, netscool.DIR_IN)
-#
-#            # Frame was flooded to dev2 but it should have dropped it.
-#            assert not dev2.interface('0/0').captured(to_dev1)
-#    netscool.clear_captures(dev0, dev1, dev2, sw)
-#
-#    dev1.interface('0/0').send(to_dev0)
-#    while event.wait:
-#        with event.conditions:
-#            # Frame should got out dev1 and shouldnt come back in.
-#            assert dev1.interface('0/0').captured(
-#                to_dev0, netscool.DIR_OUT)
-#            assert not dev1.interface('0/0').captured(
-#                to_dev0, netscool.DIR_IN)
-#
-#            # Frame should come in 0/1 on switch an be sent out 0/0 only.
-#            assert sw.interface('0/1').captured(to_dev0, netscool.DIR_IN)
-#            assert sw.interface('0/0').captured(to_dev0, netscool.DIR_OUT)
-#            assert not sw.interface('0/2').captured(to_dev0)
-#            assert not sw.interface('0/1').captured(
-#                to_dev0, netscool.DIR_OUT)
-#
-#            # dev0 should get frame.
-#            assert dev0.interface('0/0').captured(to_dev0, netscool.DIR_IN)
-#
-#            # dev2 should not see the frame.
-#            assert not dev2.interface('0/0').captured(to_dev0)
-#    netscool.clear_captures(dev0, dev1, dev2, sw)
-
-#def test_cam_entry_timeout(two_device_network):
-#    """
-#    Test CAM table entries expire as expected.
-#    """
-#    event = netscool.Event()
-#    sw, dev0, dev1 = two_device_network
-#
-#    to_dev1 = Ether(src='11:11:11:11:11:00', dst='11:11:11:11:11:01')
-#
-#    dev0.interface('0/0').send(to_dev1)
-#    while event.wait:
-#        with event.conditions:
-#
-#            # dev1 should get frame, and CAM table should be populated.
-#            assert dev1.interface('0/0').captured(to_dev1, netscool.DIR_IN)
-#            assert len(sw.cam) == 1
-#            mac = dev0.interface('0/0').mac
-#            assert mac in sw.cam
-#            assert sw.cam[mac].interface == sw.interface('0/0')
-#
-#    # Set timeout to a short time and wait for entries to expire.
-#    sw.cam_timeout = 2
-#    start = time.time()
-#    while event.wait:
-#        with event.conditions:
-#            assert len(sw.cam) == 0
-#
-#    # The cam timeout doesnt happen at the exact time. As long as its
-#    # within a reasonable range thats fine.
-#    assert sw.cam_timeout <= time.time() - start <= sw.cam_timeout + 1
 
 @pytest.fixture
 def reference_network():
@@ -400,13 +171,16 @@ def reference_network():
                 assert not switch0.powered
                 assert not switch1.powered
 
-def test_reference_switch(reference_network):
+def test_lesson2_reference_switch(reference_network):
     """
     Test our switch works with the reference implementation.
     """
     event = netscool.Event()
     sw0, sw1, dev0, dev1, dev2, dev3 = reference_network
 
+    # Send from dev0 to dev3 and make sure dev1 and dev2 dont receive
+    # the frame. Check the frame also goes through the appropriate
+    # interfaces on the two switches.
     dev0_to_dev3 = Ether(
         src=dev0.interface('0/0').mac,
         dst=dev3.interface('0/0').mac)
@@ -429,6 +203,9 @@ def test_reference_switch(reference_network):
                 dev0_to_dev3, netscool.DIR_IN)
     netscool.clear_captures(dev0, dev1, dev2, dev3, sw0, sw1)
 
+    # Send back from dev3 to dev0 and make sure dev1 and dev2 dont receive
+    # the frame. Check the frame also goes through the appropriate
+    # interfaces on the two switches.
     dev3_to_dev0 = Ether(
         src=dev3.interface('0/0').mac,
         dst=dev0.interface('0/0').mac)

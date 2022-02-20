@@ -56,7 +56,7 @@ Some common device types at each layer are.
 
  * 2 - Data Link - Switches
  * 3 - Network - Routers
- * 4 - Transport - Desktops
+ * 4 - Transport - Desktops, Servers
 
 The layers of the OSI model can be seen more clearly in the structure of encapsulated datagrams.
 

@@ -8,7 +8,7 @@ import scapy.all
 import netscool.layer1
 import netscool.layer2
 
-from tests.lesson_1 import L2Interface
+from tests.lessons.test_lesson1 import L2Interface
 
 class ARP():
     def __init__(self):

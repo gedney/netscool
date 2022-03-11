@@ -383,46 +383,120 @@ def test_l2interface_send_receive(l2device_network):
             # good_frame should be seen by both interfaces.
             assert interface0.captured(good_frame, netscool.DIR_OUT)
             assert interface1.captured(good_frame, netscool.DIR_IN)
+            import time
+            time.sleep(1)
     netscool.clear_captures(dev0, dev1)
 
-    # Send frames in the opposite direction to make sure our
-    # implementation can also receive properly.
-    wrong_dst_frame = Ether(src=interface1.mac, dst='00:00:00:00:00:00')
-    good_frame = Ether(src=interface1.mac, dst=interface0.mac)
+    ## Send frames in the opposite direction to make sure our
+    ## implementation can also receive properly.
+    #wrong_dst_frame = Ether(src=interface1.mac, dst='00:00:00:00:00:00')
+    #good_frame = Ether(src=interface1.mac, dst=interface0.mac)
 
-    interface1.send(bad_frame)
-    interface1.send(wrong_dst_frame)
-    interface1.send(good_frame)
+    #interface1.send(bad_frame)
+    #interface1.send(wrong_dst_frame)
+    #interface1.send(good_frame)
+    #while event.wait:
+    #    with event.conditions:
+    #        assert not interface1.captured(bad_frame)
+    #        assert not interface0.captured(bad_frame)
+
+    #        assert interface1.captured(wrong_dst_frame, netscool.DIR_OUT)
+    #        assert not interface0.captured(wrong_dst_frame)
+
+    #        assert interface1.captured(good_frame, netscool.DIR_OUT)
+    #        assert interface0.captured(good_frame, netscool.DIR_IN)
+    #netscool.clear_captures(dev0, dev1)
+
+    ## Set our interface as promiscuous and make sure we receive
+    ## wrong_dst_frame as well as good_frame. 
+    #interface0.promiscuous = True
+
+    #interface1.send(bad_frame)
+    #interface1.send(wrong_dst_frame)
+    #interface1.send(good_frame)
+    #while event.wait:
+    #    with event.conditions:
+    #        assert not interface1.captured(bad_frame)
+    #        assert not interface0.captured(bad_frame)
+
+    #        assert interface1.captured(wrong_dst_frame, netscool.DIR_OUT)
+    #        assert interface0.captured(wrong_dst_frame, netscool.DIR_IN)
+
+    #        assert interface1.captured(good_frame, netscool.DIR_OUT)
+    #        assert interface0.captured(good_frame, netscool.DIR_IN)
+    #netscool.clear_captures(dev0, dev1)
+
+@pytest.mark.parametrize(
+    'l2device_network', [
+        # Test L2Device and L2Interface.
+        (
+            netscool.layer2.L2Device,
+            netscool.layer2.L2Interface,
+            netscool.layer2.L2Device,
+            netscool.layer2.L2Interface
+        ),
+        # Test lesson1 examples of L2Device and L2Interface.
+        (
+            lesson1.L2Device,
+            lesson1.L2Interface,
+            lesson1.L2Device,
+            lesson1.L2Interface
+        ),
+        # Test the lesson example interoperate with reference example.
+        (
+            netscool.layer2.L2Device,
+            netscool.layer2.L2Interface,
+            lesson1.L2Device,
+            lesson1.L2Interface
+        )],
+    indirect=True)
+def test_l2interface_interface_mtu(l2device_network):
+    event = netscool.Event()
+    dev0, dev1 = l2device_network
+    interface0 = dev0.interface('0/0')
+    interface1 = dev1.interface('0/0')
+
+    # Wait for interfaces to come up.
     while event.wait:
         with event.conditions:
-            assert not interface1.captured(bad_frame)
-            assert not interface0.captured(bad_frame)
+            assert interface0.upup
+            assert interface1.upup
 
-            assert interface1.captured(wrong_dst_frame, netscool.DIR_OUT)
-            assert not interface0.captured(wrong_dst_frame)
+    mtu = interface0.mtu
+    big_frame = Ether(src=interface0.mac, dst=interface1.mac)/('A' * (mtu + 1))
+    mtu_frame = Ether(src=interface0.mac, dst=interface1.mac)/('A' * mtu)
 
-            assert interface1.captured(good_frame, netscool.DIR_OUT)
-            assert interface0.captured(good_frame, netscool.DIR_IN)
-    netscool.clear_captures(dev0, dev1)
-
-    # Set our interface as promiscuous and make sure we receive
-    # wrong_dst_frame as well as good_frame. 
-    interface0.promiscuous = True
-
-    interface1.send(bad_frame)
-    interface1.send(wrong_dst_frame)
-    interface1.send(good_frame)
+    # Its hard to prove something didnt happen, how long do we wait for
+    # big_frame knowing it should be dropped. To work around this we also
+    # send mtu_frame. If we see mtu_frame but not big_frame we can be
+    # confident the networking is working and big_frame has been dropped
+    # as we expect.
+    interface0.send(big_frame)
+    interface0.send(mtu_frame)
     while event.wait:
         with event.conditions:
-            assert not interface1.captured(bad_frame)
-            assert not interface0.captured(bad_frame)
+            assert not interface0.captured(big_frame)
+            assert not interface1.captured(big_frame)
 
-            assert interface1.captured(wrong_dst_frame, netscool.DIR_OUT)
-            assert interface0.captured(wrong_dst_frame, netscool.DIR_IN)
+            print(interface0.capture)
+            print(interface1.capture)
+            assert interface0.captured(mtu_frame, netscool.DIR_OUT)
+            assert interface1.captured(mtu_frame, netscool.DIR_IN)
 
-            assert interface1.captured(good_frame, netscool.DIR_OUT)
-            assert interface0.captured(good_frame, netscool.DIR_IN)
-    netscool.clear_captures(dev0, dev1)
+    ## Set the MTU higher for interface0 so it can send the frame but
+    ## interface1 will drop the frame on receive.
+    #interface0.mtu = 2000
+    #interface0.maximum_frame_size = 2018
+
+    #interface0.send(big_frame)
+    #interface0.send(mtu_frame)
+    #while event.wait:
+    #    with event.conditions:
+    #        assert interface0.captured(big_frame, netscool.DIR_OUT)
+    #        assert not interface1.captured(big_frame)
+
+    #        assert interface0.captured(mtu_frame, netscool.DIR_OUT)
+    #        assert interface1.captured(mtu_frame, netscool.DIR_IN)
 
 @pytest.mark.parametrize(
     'switch_network', [
@@ -863,6 +937,45 @@ def test_vlan_trunk_native(switch_vlan_network):
 
     netscool.clear_captures(sw0, sw1, dev0, dev1, dev2, dev3)
 
+@pytest.mark.parametrize(
+    'switch_vlan_network', [
+        # Test reference Switch.
+        (
+            netscool.layer2.Switch,
+            netscool.layer2.SwitchPort
+        )],
+    indirect=True)
+def test_vlan_mtu(switch_vlan_network):
+    """
+    Test adding vlan tags doesnt cause issues with MTU.
+    """
+
+    event = netscool.Event()
+    sw0, sw1, dev0, dev1, dev2, dev3 = switch_vlan_network
+
+    # Put dev0 and dev2 in vlan100
+    sw0.interface('0/1').set_access_port(100)
+    sw1.interface('0/1').set_access_port(100)
+
+    # Put dev1 and dev3 in vlan200. 
+    sw0.interface('0/2').set_access_port(200)
+    sw1.interface('0/2').set_access_port(200)
+
+    big_frame = Ether(
+        src=dev0.interface('0/0').mac, dst=dev2.interface('0/0').mac)/('A' * (dev0.interface("0/0").mtu  + 1))
+    mtu_frame = Ether(
+        src=dev0.interface('0/0').mac, dst=dev2.interface('0/0').mac)/('A' * dev0.interface("0/0").mtu)
+
+    dev0.interface('0/0').send(big_frame)
+    dev0.interface('0/0').send(mtu_frame)
+    while event.wait:
+        with event.conditions:
+
+            # Frame is only received by intended device.
+            assert dev2.interface('0/0').captured(mtu_frame, netscool.DIR_IN)
+
+    netscool.clear_captures(sw0, sw1, dev0, dev1, dev2, dev3)
+ 
 def assert_vlan_frame(cap, src_mac, dst_mac, vlan):
     """
     Utility to assert a captured packet is tagged with a specific vlan.

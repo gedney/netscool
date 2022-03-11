@@ -31,20 +31,22 @@ class L2Interface(netscool.layer1.L1Interface):
     PROTOCOL_DOWN = 'down'
     PROTOCOL_UP = 'up'
 
-    def __init__(self, name, mac, speed=1000, promiscuous=False):
+    def __init__(self, name, mac, bandwidth=1000, mtu=1500, promiscuous=False):
         """
         :param name: Name of interface to make identification simpler.
         :param mac: Layer2 MAC address for interface in the form
             XX:XX:XX:XX:XX:XX. 
-        :param speed: Speed of interfaces in bits per second.
+        :param bandwidth: Bandwidth of interfaces in bits per second.
         :param promiscuous: A promiscuous interface will accept frames
             destined to any MAC address. A non-promiscuous interface
             will drop frames that are not destined for it.
         """
-        super().__init__(name, speed)
+        super().__init__(name, bandwidth)
         self.mac = mac
         self.promiscuous = promiscuous
         self.protocol_status = L2Interface.PROTOCOL_DOWN
+        self.mtu = mtu
+        self.maximum_frame_size = mtu + 18
 
     @property
     def protocol_up(self):
@@ -110,6 +112,8 @@ class L2Interface(netscool.layer1.L1Interface):
         # frame
         #  * Check the layer 1 link and layer 2 protocol up ie. interface
         #    is up/up.
+        #  * Check received data is less than maximum frame size.
+        #  * Strip 4 byte FCS from end of data.
         #  * Convert the data we received from layer 1 to a Scapy Ether
         #    frame eg. frame = Ether(data).
         #  * If the interface is not in promiscuous mode then check the
@@ -134,6 +138,8 @@ class L2Interface(netscool.layer1.L1Interface):
         #    up/up
         #  * Is the frame valid. We consider the frame valid if it is a
         #    Scapy Ether object.
+        #  * Append 4 byte FCS to end of frame.
+        #  * Is the total frame size less than maximum frame size.
         # TODO: Make sure we are sending a valid layer 2 frame.
 
         # This will send our frame to layer 1, where it will be sent
@@ -177,7 +183,6 @@ if __name__ == "__main__":
 import pytest
 import netscool
 import netscool.layer2
-
 # Note: Each device has its own event_loop running in a seperate thread
 # to the main thread. This means that many actions are not instantaneous
 # and instead take some time to propagate as each device runs its event
@@ -384,3 +389,43 @@ def test_interface_send_receive(network):
 
     interface1.clear_capture()
     interface2.clear_capture()
+
+def test_interface_mtu(network):
+    event = netscool.Event()
+    device1, device2 = network
+    
+    interface1 = device1.interface("Int1")
+    interface2 = device2.interface("Int2")
+
+    # Wait for interfaces to come up.
+    while event.wait:
+        with event.conditions:
+            assert interface1.upup
+            assert interface2.upup
+
+    mtu = interface1.mtu
+    big_frame = Ether(src=interface1.mac, dst=interface2.mac)/('A' * (mtu + 1))
+    mtu_frame = Ether(src=interface1.mac, dst=interface2.mac)/('A' * mtu)
+
+    interface1.send(big_frame)
+    interface1.send(mtu_frame)
+    while event.wait:
+        with event.conditions:
+            assert not interface2.captured(big_frame)
+            assert not interface1.captured(big_frame)
+
+            assert interface1.captured(mtu_frame, netscool.DIR_OUT)
+            assert interface2.captured(mtu_frame, netscool.DIR_IN)
+
+    interface1.mtu = 2000
+    interface1.maximum_frame_size = 2018
+
+    interface1.send(big_frame)
+    interface1.send(mtu_frame)
+    while event.wait:
+        with event.conditions:
+            assert interface1.captured(big_frame, netscool.DIR_OUT)
+            assert not interface2.captured(big_frame)
+
+            assert interface1.captured(mtu_frame, netscool.DIR_OUT)
+            assert interface2.captured(mtu_frame, netscool.DIR_IN)

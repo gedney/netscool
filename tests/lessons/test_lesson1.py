@@ -29,11 +29,13 @@ class L2Interface(netscool.layer1.L1Interface):
     PROTOCOL_DOWN = 'down'
     PROTOCOL_UP = 'up'
 
-    def __init__(self, name, mac, speed=1000, promiscuous=False):
-        super().__init__(name, speed)
+    def __init__(self, name, mac, bandwidth=1000, mtu=1500, promiscuous=False):
+        super().__init__(name, bandwidth)
         self.mac = mac
         self.promiscuous = promiscuous
         self.protocol_status = L2Interface.PROTOCOL_DOWN
+        self.mtu = mtu
+        self.maximum_frame_size = mtu + 18
 
     @property
     def protocol_up(self):
@@ -62,6 +64,9 @@ class L2Interface(netscool.layer1.L1Interface):
         data = super().receive()
         if not data:
             return
+        if len(data) > self.maximum_frame_size:
+            return
+        data = data[:-4]
         try:
             frame = Ether(data)
         except:
@@ -75,7 +80,10 @@ class L2Interface(netscool.layer1.L1Interface):
             return
         if not isinstance(frame, Ether):
             return
-        super().send(bytes(frame))
+        data = bytes(frame) + b'\0\0\0\0'
+        if len(data) > self.maximum_frame_size:
+            return
+        super().send(data)
 
     def __str__(self):
         return "{} ({})".format(super().__str__(), self.mac)

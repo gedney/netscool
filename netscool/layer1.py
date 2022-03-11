@@ -10,6 +10,8 @@ import socket
 import select
 import collections
 
+import scapy.all
+
 LINE_DOWN = 'down'
 LINE_UP = 'up'
 LINE_ADMIN_DOWN = 'admin down'
@@ -201,28 +203,69 @@ class BaseInterface():
         self.receive = self._capture_receive
         self.send = self._capture_send
 
-    def captured(self, data, direction=None):
+    def captured(self, search, direction=None):
         """
-        Was the given 'data' captured by the interface. Only checks if
-        the exact bytes were captured, doesnt attempt to find the 'data'
-        if it is encapsulated.
+        Was the given 'search' object captured. Will attempt to search for
+        'search' object within captures eg. If you pass in a IP packet 
+        will attempt to find that inside Ether frames. If you pass in raw
+        bytes the capture will be checked exactly and no introspection will
+        occur.
 
-        :param data: The bytes to search for.
-        :param direction: Optionally check the bytes were captured going
+        :param search: The object to search for.
+        :param direction: Optionally check the capture was captured going
             in or out of the interface. Valid values are "IN" 
             (netscool.layer1.DIR_IN), "OUT" (netscool.layer1.DIR_OUT), or 
             None
         :returns: True or False.
         """
-        if not isinstance(data, bytes):
-            data = bytes(data)
+        def check_direction(direction, capture):
+            if direction is None:
+                return True
+            if direction == capture.direction:
+                return True
+            return False
 
         for capture in self._capture:
-            if capture.data != data:
+            capture_bytes = capture.data
+
+            # Bytes passed in so check bytes match exactly.
+            if type(search) == type(capture_bytes):
+                if (search == capture_bytes and
+                    check_direction(direction, capture)):
+                    return True
                 continue
-            if direction is not None and capture.direction != direction:
-                continue
-            return True
+
+            # Strip off 4 byte FCS appended to frames. This is only
+            # visible on captures coming out of the interface.
+            if capture.direction == DIR_OUT:
+                capture_bytes = capture_bytes[:-4]
+
+            for layer in [scapy.all.Ether, scapy.all.Dot1Q, scapy.all.IP]:
+                
+                # Attempt to convert bytes to next layer.
+                try:
+                    capture_obj = layer(capture_bytes)
+                    capture_bytes = bytes(capture_obj.payload)
+
+                # Converting to this layer didnt work so move onto the
+                # next layer.
+                except:
+                    capture_obj = None
+                    continue
+
+                # The type of this layer was passed in so check if it
+                # matches.
+                if type(search) == type(capture_obj):
+
+                    # This capture matches, so we're done!
+                    if (search == capture_obj and
+                        check_direction(direction, capture)):
+                        return True
+
+                    # didnt match so no point comparing against this
+                    # capture anymore.
+                    break
+
         return False
 
     @property
@@ -326,11 +369,11 @@ class BaseInterface():
         return self.name
 
 class L1Interface(BaseInterface):
-    def __init__(self, name, speed=1000):
+    def __init__(self, name, bandwidth=1000):
         super().__init__(name)
 
-        # TODO check both ends speed match.
-        self.speed = speed
+        # TODO check both ends bandwidth match.
+        self.bandwidth = bandwidth
         self.line_status = LINE_DOWN
 
     @property

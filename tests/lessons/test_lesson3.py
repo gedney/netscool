@@ -89,10 +89,11 @@ class SwitchPort(L2Interface):
     ACCESS = 'access'
     TRUNK = 'trunk'
 
-    def __init__(self, name, mac, bandwidth=1000):
-        super().__init__(name, mac, bandwidth, True)
+    def __init__(self, name, mac, bandwidth=1000, mtu=1500):
+        super().__init__(name, mac, bandwidth, mtu, True)
         self.default_vlan = 1
         self.set_access_port()
+        self.maximum_frame_size += 4
 
     def set_access_port(self, vlan=None):
         self._vlan = vlan
@@ -306,4 +307,21 @@ def test_lesson3_reference_switch(reference_network):
             assert len(sw1.interface('0/1').capture) == 0
             assert len(sw0.interface('0/2').capture) == 1
             assert len(sw1.interface('0/2').capture) == 1
+    netscool.clear_captures(dev0, dev1, dev2, dev3, sw0, sw1)
+
+    # Send some big frames and make sure they works as expected.
+    big_frame = scapy.all.Ether(
+        src=dev1.interface('0/0').mac,
+        dst=dev3.interface('0/0').mac)/("A" * 1501)
+    mtu_frame = scapy.all.Ether(
+        src=dev1.interface('0/0').mac,
+        dst=dev3.interface('0/0').mac)/("A" * 1500)
+
+    dev1.interface('0/0').send(big_frame)
+    dev1.interface('0/0').send(mtu_frame)
+    while event.wait:
+        with event.conditions:
+            # dev3 only got mtu size frame, didnt get big frame.
+            assert dev3.interface('0/0').captured(mtu_frame, netscool.DIR_IN)
+
     netscool.clear_captures(dev0, dev1, dev2, dev3, sw0, sw1)

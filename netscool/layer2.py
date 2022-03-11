@@ -34,7 +34,7 @@ class L2Interface(netscool.layer1.L1Interface):
     PROTOCOL_DOWN = 'down'
     PROTOCOL_UP = 'up'
     PROTOCOL_ERR = 'down err'
-    def __init__(self, name, mac, bandwidth=1000, promiscuous=False):
+    def __init__(self, name, mac, bandwidth=1000, mtu=1500, promiscuous=False):
         """
         :param name: Name of interface to make identification simpler.
         :param mac: Layer2 MAC address for interface in the form
@@ -42,6 +42,7 @@ class L2Interface(netscool.layer1.L1Interface):
         :param bandwidth: Bandwidth of interfaces in bits per second.
             Each interface at the end of a link must have the same
             bandwidth.
+        :param mtu: Maximum size of payload for a frame.
         :param promiscuous: A promiscuous interface will accept frames
             destined to any MAC address. A non-promiscuous interface
             will drop frames that are not destined for it.
@@ -50,6 +51,18 @@ class L2Interface(netscool.layer1.L1Interface):
         self.mac = mac
         self.promiscuous = promiscuous
         self.protocol_status = L2Interface.PROTOCOL_DOWN
+        self.mtu = mtu
+
+        # Maximum size of an ethernet frame including 18 byte header. This
+        # is sometimes confusingly also referred to as MTU, or layer 2
+        # MTU. For our purposes we will stick with the strict definition
+        # of MTU being the maximum payload size of a frame not including
+        # headers. 18 bytes calculated from
+        # src_mac(6 bytes) +
+        # dst_mac(6 bytes) +
+        # ether_type(2 bytes) +
+        # frame_check_sequence(4 bytes) = 6 + 6 + 2 + 4 = 18.
+        self.maximum_frame_size = mtu + 18
 
     @property
     def upup(self):
@@ -107,6 +120,15 @@ class L2Interface(netscool.layer1.L1Interface):
         if not data:
             return
 
+        if len(data) > self.maximum_frame_size:
+            logger.error(
+                "{} Frame to big to be received {} > {}".format(
+                    self, len(data), self.maximum_frame_size))
+            return
+
+        # Strip off FCS bytes from end of frame.
+        data = data[:-4]
+
         try:
             frame = scapy.all.Ether(data)
         except:
@@ -140,8 +162,17 @@ class L2Interface(netscool.layer1.L1Interface):
             logger.error('{} can only send Ether frames'.format(self))
             return
 
+        # Convert scapy Ether to bytes and append 4 byte FCS.
+        data = bytes(frame) + b'\0\0\0\0'
+
+        if len(data) > self.maximum_frame_size:
+            logger.error(
+                "{} Frame to big to be sent {} > {}".format(
+                    self, len(data), self.maximum_frame_size))
+            return
+
         logger.info("{} sending layer2 frame".format(self))
-        super().send(bytes(frame))
+        super().send(data)
 
     def __str__(self):
         return "{} ({})".format(super().__str__(), self.mac)
@@ -296,10 +327,14 @@ class SwitchPort(L2Interface):
     ACCESS = 'access'
     TRUNK = 'trunk'
 
-    def __init__(self, name, mac, bandwidth=1000):
-        super().__init__(name, mac, bandwidth, True)
+    def __init__(self, name, mac, bandwidth=1000, mtu=1500):
+        super().__init__(name, mac, bandwidth, mtu, True)
         self.default_vlan = 1
         self.set_access_port()
+
+        # We need to increase maximum frame size by 4 bytes to fit any possible
+        # vlan tags for this interface.
+        self.maximum_frame_size += 4
 
     def set_access_port(self, vlan=None):
         """

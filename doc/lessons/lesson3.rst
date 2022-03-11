@@ -90,6 +90,11 @@ What is "Dot One Queue"?
 
 ``IEEE 802.1Q`` is the standard that defines "Virtual LANs". Commonly VLAN tags are referred to as "dot1q" tags. The Scapy class to create a VLAN tag is the "Dot1Q" class. There are proprietary and legacy "Virtual LAN" protocols, however these are very much an exception. VLANs almost universally refer to ``802.1Q`` VLANs, and so the two terms are used interchangeably.
 
+Where Does My Tag Fit?
+----------------------
+
+As discussed in ``lesson1`` there is a maximum size for frames being sent by our layer 2 interfaces. Our VLAN tag is 4 bytes long, which means we can either decrease MTU by 4 bytes, or increase the maximum frame size by 4 bytes. Decreasing the MTU means that every endpoint needs to be aware that VLAN tagging is taking place and adjust MTU so their frames dont get dropped when we try add a tag. Instead ``IEEE 802.1Q`` specifies that the VLAN tag is included in the ``Ethernet`` header and the maximum frame size is increased by 4 bytes. This mean maximum frame size goes from (mtu + 18) to (mtu + 22) for interfaces that are expecting to receive vlan tagged frames.
+
 Go Forth
 --------
 

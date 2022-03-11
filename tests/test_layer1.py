@@ -426,6 +426,6 @@ def test_interface_send_receive(network):
     while event.wait:
         with event.conditions:
             recv = int2.receive()
-            assert recv == data
+            assert recv == data 
             assert int1.captured(data, netscool.layer1.DIR_OUT)
             assert int2.captured(data, netscool.layer1.DIR_IN)

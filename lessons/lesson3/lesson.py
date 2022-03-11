@@ -35,11 +35,12 @@ class SwitchPort(L2Interface):
     ACCESS = 'access'
     TRUNK = 'trunk'
 
-    def __init__(self, name, mac, bandwidth=1000):
-        super().__init__(name, mac, bandwidth, True)
+    def __init__(self, name, mac, bandwidth=1000, mtu=1500):
+        super().__init__(name, mac, bandwidth, mtu, True)
         self.default_vlan = 1
 
         # Set the port as and access port in the default vlan.
+        # Increase maximum frame size by 4 to fit vlan tag.
         pass
 
     def set_access_port(self, vlan=None):

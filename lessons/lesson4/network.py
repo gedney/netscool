@@ -10,8 +10,9 @@ netscool.log.add('netscool.layer3')
 netscool.log.list()
 
 if __name__ == "__main__":
-    dev1 = netscool.layer3.L3Device("dev1", [
-            netscool.layer3.IPInterface("0/0", "10.0.1.2/24", "00:00:00:00:01:02"),
+    dev1 = netscool.layer3.L3Device("dev1", "10.0.1.1", [
+            netscool.layer3.IPInterface(
+                "0/0", "10.0.1.2/24", "00:00:00:00:01:02"),
         ])
 
     cable = netscool.layer1.SocketCable(11111, 22222)
@@ -19,8 +20,6 @@ if __name__ == "__main__":
 
     # Manually populate ARP table for device.
     dev1.arp.table = {
-        '10.0.0.2' : '00:00:00:00:01:00',
-        '10.0.0.1' : '00:00:00:00:01:00',
         '10.0.1.1' : '00:00:00:00:01:00',
     }
 
